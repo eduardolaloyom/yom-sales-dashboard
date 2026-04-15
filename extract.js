@@ -41,8 +41,7 @@ for (const client of CLIENTS) {
     { $group: {
       _id: null,
       ordenes:     { $sum: 1 },
-      ventaSinIVA: { $sum: '$pricing.totalPrice' },
-      ventaConIVA: { $sum: '$pricing.finalTotalPrice' },
+      ventaSinIVA: { $sum: '$pricing.discountedTotalPrice' },
       primeraOrden: { $min: { $toDate: '$createdAt' } },
       ultimaOrden:  { $max: { $toDate: '$createdAt' } }
     }}
@@ -52,7 +51,7 @@ for (const client of CLIENTS) {
     data.clients.push({
       domain, name, currency, sinDatos: true,
       ordenes: 0, comercios: 0, comerciosRegistrados: 0,
-      ventaSinIVA: 0, ventaConIVA: 0,
+      ventaSinIVA: 0,
       primeraOrden: null, ultimaOrden: null, mensual: []
     });
     continue;
@@ -79,8 +78,7 @@ for (const client of CLIENTS) {
         month: { $month: { $toDate: '$createdAt' } }
       },
       ordenes:     { $sum: 1 },
-      ventaSinIVA: { $sum: '$pricing.totalPrice' },
-      ventaConIVA: { $sum: '$pricing.finalTotalPrice' }
+      ventaSinIVA: { $sum: '$pricing.discountedTotalPrice' }
     }},
     { $sort: { '_id.year': 1, '_id.month': 1 } }
   ]).toArray();
@@ -133,7 +131,6 @@ for (const client of CLIENTS) {
     month:            m._id.month,
     ordenes:          m.ordenes,
     ventaSinIVA:      Math.round(m.ventaSinIVA * fxRate),
-    ventaConIVA:      Math.round(m.ventaConIVA * fxRate),
     comerciosActivos:   comerciosMesMap[`${m._id.year}-${m._id.month}`]   || 0,
     vendedoresActivos:  vendedoresMesMap[`${m._id.year}-${m._id.month}`]  || 0
   }));
@@ -145,7 +142,6 @@ for (const client of CLIENTS) {
     comerciosRegistrados,
     vendedores,
     ventaSinIVA:          Math.round(totales.ventaSinIVA * fxRate),
-    ventaConIVA:          Math.round(totales.ventaConIVA * fxRate),
     primeraOrden:         totales.primeraOrden,
     ultimaOrden:          totales.ultimaOrden,
     mensual
