@@ -3,14 +3,13 @@
 // Uso: mongosh "<MONGO_URI>" --quiet --file extract.js > data.js
 // ============================================================
 
-const STATUS = 'processing';
-
 // Últimos 12 meses
 const date12ago = new Date();
 date12ago.setMonth(date12ago.getMonth() - 12);
 
 const CLIENTS = [
-  { domain: 'soprole.youorder.me',         name: 'Soprole',         currency: 'CLP' },
+  // Soprole usa 'pending' como status activo (su flujo no pasa a 'processing')
+  { domain: 'soprole.youorder.me',         name: 'Soprole',         currency: 'CLP', statuses: ['pending'] },
   { domain: 'codelpa.youorder.me',          name: 'Codelpa',         currency: 'CLP' },
   { domain: 'codelpa-peru.youorder.me',     name: 'Codelpa Perú',    currency: 'CLP' },
   { domain: 'softys-cencocal.youorder.me',  name: 'Softys-Cencocal', currency: 'CLP' },
@@ -33,11 +32,12 @@ const data = {
 };
 
 for (const client of CLIENTS) {
-  const { domain, name, currency, fxRate = 1 } = client;
+  const { domain, name, currency, fxRate = 1, statuses = ['processing'] } = client;
+  const statusFilter = statuses.length === 1 ? statuses[0] : { $in: statuses };
 
   // ── Totales all-time ─────────────────────────────────────
   const totales = db.orders.aggregate([
-    { $match: { domain, status: STATUS } },
+    { $match: { domain, status: statusFilter } },
     { $group: {
       _id: null,
       ordenes:     { $sum: 1 },
@@ -59,7 +59,7 @@ for (const client of CLIENTS) {
   }
 
   // ── Comercios distintos con orden (all-time) ──────────────
-  const comercios = db.orders.distinct('commerceId', { domain, status: STATUS }).length;
+  const comercios = db.orders.distinct('commerceId', { domain, status: statusFilter }).length;
 
   // ── Comercios registrados (activos en collection) ─────────
   const comerciosRegistrados = db.commerces.countDocuments({ domain, active: true });
@@ -67,7 +67,7 @@ for (const client of CLIENTS) {
   // ── Pipeline 1: métricas mensuales (últimos 12 meses) ─────
   // Usar $expr para soportar createdAt tanto ISODate como string
   const metricasMes = db.orders.aggregate([
-    { $match: { domain, status: STATUS, createdAt: { $ne: null },
+    { $match: { domain, status: statusFilter, createdAt: { $ne: null },
         $expr: { $gte: [ { $toDate: '$createdAt' }, date12ago ] } } },
     { $group: {
       _id: {
@@ -83,7 +83,7 @@ for (const client of CLIENTS) {
 
   // ── Pipeline 2: comercios activos por mes (double-group) ──
   const comerciosMes = db.orders.aggregate([
-    { $match: { domain, status: STATUS, createdAt: { $ne: null }, commerceId: { $ne: null },
+    { $match: { domain, status: statusFilter, createdAt: { $ne: null }, commerceId: { $ne: null },
       $expr: { $gte: [ { $toDate: '$createdAt' }, date12ago ] } } },
     { $group: { _id: {
       year:       { $year:  { $toDate: '$createdAt' } },
