@@ -41,7 +41,7 @@
     <div class="flex items-center gap-4">
       <div id="hdr-gmv" class="text-right hidden md:block">
         <div class="font-bold text-gray-900 text-sm" id="hdr-total">—</div>
-        <div class="text-xs text-gray-400">Ventas sin IVA (12m)</div>
+        <div class="text-xs text-gray-400">Ventas (12m)</div>
       </div>
       <div class="text-xs text-gray-400" id="hdr-ts">—</div>
     </div>
@@ -78,8 +78,7 @@
 
       <!-- Tabs métricas -->
       <div class="flex gap-5 border-b border-gray-100 mb-4">
-        <button class="metric-tab active pb-2 text-sm" data-metric="ventaSinIVA">Ventas sin IVA</button>
-        <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="ventaConIVA">Ventas con IVA</button>
+        <button class="metric-tab active pb-2 text-sm" data-metric="ventaSinIVA">Ventas</button>
         <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="ordenes">Órdenes</button>
         <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="comerciosActivos">Comercios activos</button>
       </div>
@@ -102,8 +101,7 @@
               <th class="px-4 py-2.5 text-right">Vendedores</th>
               <th class="px-4 py-2.5 text-right">Comercios</th>
               <th class="px-4 py-2.5 text-right">% Activación</th>
-              <th class="px-4 py-2.5 text-right">Ventas sin IVA</th>
-              <th class="px-4 py-2.5 text-right">Ventas con IVA</th>
+              <th class="px-4 py-2.5 text-right">Ventas</th>
               <th class="px-4 py-2.5 text-right">Venta/vendedor</th>
               <th class="px-4 py-2.5 text-right">Pedido prom.</th>
               <th class="px-4 py-2.5 text-right">Pedidos/vendedor</th>
@@ -192,7 +190,7 @@ function renderGlobal() {
   document.getElementById('hdr-total').textContent = clpM(gmv12);
 
   document.getElementById('global-kpis').innerHTML = [
-    { label: 'Ventas sin IVA (12m)',     value: clpM(gmv12),         sub: cl.length + ' clientes activos',       color: 'text-blue-700' },
+    { label: 'Ventas (12m)',              value: clpM(gmv12),         sub: cl.length + ' clientes activos',       color: 'text-blue-700' },
     { label: 'Pedidos (12m)',            value: num(ords12),          sub: 'órdenes procesadas',                  color: 'text-gray-900' },
     { label: 'Comercios activos',        value: num(totalComs),       sub: 'con al menos 1 orden',                color: 'text-gray-900' },
     { label: 'Tasa activación global',   value: pct(actRate),         sub: totalComs + ' de ' + num(totalReg) + ' registrados', color: actRate >= 50 ? 'text-green-700' : 'text-orange-600' },
@@ -286,8 +284,7 @@ function openClient(client) {
   const comXVendedor   = client.vendedores > 0 ? client.comercios   / client.vendedores  : 0;
 
   document.getElementById('d-kpis').innerHTML = [
-    { label: 'Ventas sin IVA',         value: clpM(client.ventaSinIVA),                          sub: 'historial completo' },
-    { label: 'Ventas con IVA',         value: clpM(client.ventaConIVA),                          sub: 'historial completo' },
+    { label: 'Ventas',                  value: clpM(client.ventaSinIVA),                          sub: 'historial completo' },
     { label: 'Pedidos totales',        value: num(client.ordenes),                               sub: 'órdenes procesadas' },
     { label: 'Vendedores activos',     value: num(client.vendedores),                            sub: 'con al menos 1 pedido' },
     { label: 'Comercios compradores',  value: num(client.comercios),                             sub: 'de ' + num(client.comerciosRegistrados) + ' registrados' },
@@ -324,10 +321,10 @@ function renderChart() {
   const momVals = mn.map((m,i) => i === 0 ? null : mom(mn, i, activeMetric));
 
   const metricLabels = {
-    ventaSinIVA: 'Ventas sin IVA', ventaConIVA: 'Ventas con IVA',
+    ventaSinIVA: 'Ventas',
     ordenes: 'Pedidos', comerciosActivos: 'Comercios activos'
   };
-  const isMoney = activeMetric === 'ventaSinIVA' || activeMetric === 'ventaConIVA';
+  const isMoney = activeMetric === 'ventaSinIVA';
 
   activeChart = new Chart(document.getElementById('chart'), {
     data: {
@@ -395,8 +392,8 @@ function renderTable() {
   const mn = activeClient.mensual;
   const reg = activeClient.comerciosRegistrados;
 
-  let totOrd=0, totSin=0, totCon=0;
-  mn.forEach(m => { totOrd+=m.ordenes; totSin+=m.ventaSinIVA; totCon+=m.ventaConIVA; });
+  let totOrd=0, totSin=0;
+  mn.forEach(m => { totOrd+=m.ordenes; totSin+=m.ventaSinIVA; });
 
   document.getElementById('monthly-tbody').innerHTML = mn.map((m, i) => {
     const momVal      = mom(mn, i, 'ventaSinIVA');
@@ -412,7 +409,6 @@ function renderTable() {
       <td class="px-4 py-2.5 text-right tabular-nums">${num(m.comerciosActivos)}</td>
       <td class="px-4 py-2.5 text-right">${actPct != null ? pct(actPct) : '—'}</td>
       <td class="px-4 py-2.5 text-right font-medium tabular-nums">${clpM(m.ventaSinIVA)}</td>
-      <td class="px-4 py-2.5 text-right text-gray-600 tabular-nums">${clpM(m.ventaConIVA)}</td>
       <td class="px-4 py-2.5 text-right tabular-nums">${clpM(ventaVend)}</td>
       <td class="px-4 py-2.5 text-right tabular-nums">${clpM(ticket)}</td>
       <td class="px-4 py-2.5 text-right tabular-nums">${freqVend.toFixed(1)}x</td>
@@ -428,7 +424,6 @@ function renderTable() {
     <td class="px-4 py-2.5 text-right">—</td>
     <td class="px-4 py-2.5 text-right">—</td>
     <td class="px-4 py-2.5 text-right tabular-nums">${clpM(totSin)}</td>
-    <td class="px-4 py-2.5 text-right tabular-nums">${clpM(totCon)}</td>
     <td class="px-4 py-2.5 text-right">—</td>
     <td class="px-4 py-2.5 text-right tabular-nums">${clpM(totOrd > 0 ? totSin/totOrd : 0)}</td>
     <td class="px-4 py-2.5 text-right">—</td>
