@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YOM Sales Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="data.js"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; background: #f8fafc; }
+    .client-card { transition: all 0.15s; cursor: pointer; }
+    .client-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    .client-card.active { border-color: #2563eb; background: #eff6ff; }
+    .client-card.no-data { opacity: 0.5; cursor: default; }
+    .client-card.no-data:hover { transform: none; box-shadow: none; }
+    th[data-col] { cursor: pointer; user-select: none; }
+    th[data-col]:hover { background: #e2e8f0; }
+    .sort-asc::after  { content: ' ↑'; color: #2563eb; }
+    .sort-desc::after { content: ' ↓'; color: #2563eb; }
+    #chart-wrap { position: relative; height: 300px; }
+    .tab-btn { transition: all 0.15s; }
+    .tab-btn.active { background: #2563eb; color: white; }
+    .month-bar { transition: width 0.4s ease; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- Topbar -->
+<header class="bg-white border-b border-gray-200 sticky top-0 z-10">
+  <div class="max-w-screen-xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+        <span class="text-white font-bold text-sm">Y</span>
+      </div>
+      <div>
+        <span class="font-semibold text-gray-900">YOM Sales Dashboard</span>
+        <span class="ml-2 text-xs text-gray-400">Legacy Production</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <div id="header-gmv" class="text-right hidden md:block">
+        <div class="text-sm font-bold text-gray-800" id="hdr-total"></div>
+        <div class="text-xs text-gray-400">GMV total sin IVA</div>
+      </div>
+      <div class="text-xs text-gray-400" id="extract-ts"></div>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-screen-xl mx-auto px-6 py-6 space-y-6">
+
+  <!-- Global KPIs -->
+  <div id="global-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+
+  <!-- Grilla de clientes -->
+  <div>
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-gray-800">Clientes</h2>
+      <span class="text-xs text-gray-400">Haz clic para ver detalle</span>
+    </div>
+    <div id="client-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"></div>
+  </div>
+
+  <!-- Panel de detalle -->
+  <div id="detail-panel" class="hidden space-y-5">
+
+    <!-- Header del cliente -->
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+        <div>
+          <h2 id="d-title" class="text-xl font-bold text-gray-900"></h2>
+          <p id="d-dates" class="text-xs text-gray-400 mt-0.5"></p>
+          <p id="d-domain" class="text-xs text-blue-400 mt-0.5"></p>
+        </div>
+        <div id="d-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+      </div>
+
+      <!-- Tabs vista -->
+      <div class="flex gap-2 mb-4">
+        <button class="tab-btn active text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200" data-tab="chart-view">Gráfico mensual</button>
+        <button class="tab-btn text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600" data-tab="table-view">Tabla mensual</button>
+      </div>
+
+      <!-- Gráfico -->
+      <div id="chart-view" class="tab-content">
+        <div class="flex gap-3 mb-3 text-xs">
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="radio" name="metrica" value="ventaSinIVA" checked class="accent-blue-600"> Sin IVA
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="radio" name="metrica" value="ventaConIVA" class="accent-blue-600"> Con IVA
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="radio" name="metrica" value="ordenes" class="accent-blue-600"> Órdenes
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="radio" name="metrica" value="ambas" class="accent-blue-600"> Sin IVA + Con IVA
+          </label>
+        </div>
+        <div id="chart-wrap"><canvas id="monthly-chart"></canvas></div>
+      </div>
+
+      <!-- Tabla mensual inline -->
+      <div id="table-view" class="tab-content hidden overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+            <tr>
+              <th class="px-4 py-2 text-left" data-col="label">Mes</th>
+              <th class="px-4 py-2 text-right" data-col="ordenes">Órdenes</th>
+              <th class="px-4 py-2 text-right" data-col="ventaSinIVA">Sin IVA</th>
+              <th class="px-4 py-2 text-right" data-col="ventaConIVA">Con IVA</th>
+              <th class="px-4 py-2 text-right" data-col="ticket">Ticket prom.</th>
+            </tr>
+          </thead>
+          <tbody id="monthly-tbody"></tbody>
+          <tfoot id="monthly-tfoot" class="bg-gray-50 font-semibold text-gray-800 text-sm"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Top vendedores -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="font-semibold text-gray-800 text-sm">Top Vendedores</h3>
+        <span id="d-vendedores-total" class="text-xs text-gray-400"></span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+            <tr>
+              <th class="px-5 py-2 text-left">#</th>
+              <th class="px-5 py-2 text-left">Nombre</th>
+              <th class="px-5 py-2 text-left hidden md:table-cell">Email</th>
+              <th class="px-5 py-2 text-right">Órdenes</th>
+              <th class="px-5 py-2 text-right">Venta sin IVA</th>
+              <th class="px-5 py-2 text-right w-32">% del total</th>
+            </tr>
+          </thead>
+          <tbody id="seller-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /detail-panel -->
+
+</div><!-- /container -->
+
+<script>
+// ── Formato CLP ───────────────────────────────────────────
+const clp = n => {
+  if (n == null || n === 0) return '$0';
+  return new Intl.NumberFormat('es-CL', {
+    style: 'currency', currency: 'CLP', maximumFractionDigits: 0
+  }).format(n);
+};
+const clpM = n => {
+  if (n == null) return '—';
+  if (Math.abs(n) >= 1_000_000_000) return '$' + (n / 1_000_000_000).toFixed(1) + 'B';
+  if (Math.abs(n) >= 1_000_000)     return '$' + (n / 1_000_000).toFixed(1) + 'M';
+  return clp(n);
+};
+const num = n => n == null ? '—' : new Intl.NumberFormat('es-CL').format(n);
+const MONTHS = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const mLabel = (y, m) => `${MONTHS[m]} ${String(y).slice(2)}`;
+const dateStr = iso => iso ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+
+// ── Estado ────────────────────────────────────────────────
+let activeClient = null, activeChart = null;
+
+// ── Init ─────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  if (typeof YOM_DATA === 'undefined') {
+    document.body.innerHTML = `<div class="flex items-center justify-center h-screen flex-col gap-3 text-gray-400">
+      <p class="text-lg font-semibold">Sin datos</p>
+      <code class="bg-gray-100 text-gray-600 text-sm px-3 py-2 rounded">mongosh "&lt;URI&gt;" --quiet --file extract.js > data.js</code>
+    </div>`;
+    return;
+  }
+
+  document.getElementById('extract-ts').textContent =
+    'Actualizado ' + new Date(YOM_DATA.extractedAt).toLocaleString('es-CL', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+
+  renderGlobal();
+  renderGrid();
+  setupTabs();
+  setupMetricaRadios();
+
+  // Abrir primer cliente con datos por defecto
+  const first = YOM_DATA.clients.find(c => !c.sinDatos);
+  if (first) selectClient(first);
+});
+
+// ── Global KPIs ──────────────────────────────────────────
+function renderGlobal() {
+  const cl = YOM_DATA.clients.filter(c => !c.sinDatos);
+  const gmv   = cl.reduce((a, c) => a + c.ventaSinIVA, 0);
+  const ords  = cl.reduce((a, c) => a + c.ordenes, 0);
+  const coms  = cl.reduce((a, c) => a + c.comercios, 0);
+  const vends = cl.reduce((a, c) => a + c.vendedores, 0);
+
+  document.getElementById('hdr-total').textContent = clpM(gmv);
+
+  document.getElementById('global-kpis').innerHTML = [
+    { label: 'GMV total sin IVA', value: clpM(gmv),    sub: cl.length + ' clientes activos',    color: 'text-blue-700' },
+    { label: 'Órdenes procesadas', value: num(ords),   sub: 'status: processing',                color: 'text-gray-900' },
+    { label: 'Comercios distintos', value: num(coms),  sub: 'con al menos 1 orden',              color: 'text-gray-900' },
+    { label: 'Vendedores activos',  value: num(vends), sub: 'con al menos 1 orden',              color: 'text-gray-900' },
+  ].map(k => `
+    <div class="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
+      <div class="text-2xl font-bold ${k.color}">${k.value}</div>
+      <div class="text-sm font-medium text-gray-700 mt-1">${k.label}</div>
+      <div class="text-xs text-gray-400 mt-0.5">${k.sub}</div>
+    </div>
+  `).join('');
+}
+
+// ── Grilla de clientes ────────────────────────────────────
+function renderGrid() {
+  document.getElementById('client-grid').innerHTML = YOM_DATA.clients.map(c => `
+    <div class="client-card bg-white rounded-xl border-2 border-gray-200 p-3 ${c.sinDatos ? 'no-data' : ''}"
+         data-domain="${c.domain}">
+      <div class="text-xs font-bold text-gray-800 truncate">${c.name}</div>
+      ${c.sinDatos
+        ? `<div class="text-xs text-gray-400 mt-1">Sin datos</div>`
+        : `<div class="text-sm font-bold text-blue-700 mt-1">${clpM(c.ventaSinIVA)}</div>
+           <div class="text-xs text-gray-400">${num(c.ordenes)} órd.</div>`
+      }
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.client-card:not(.no-data)').forEach(card => {
+    card.addEventListener('click', () => {
+      const c = YOM_DATA.clients.find(x => x.domain === card.dataset.domain);
+      selectClient(c);
+    });
+  });
+}
+
+// ── Seleccionar cliente ───────────────────────────────────
+function selectClient(client) {
+  activeClient = client;
+  document.querySelectorAll('.client-card').forEach(c => c.classList.remove('active'));
+  const card = document.querySelector(`.client-card[data-domain="${client.domain}"]`);
+  if (card) card.classList.add('active');
+
+  document.getElementById('detail-panel').classList.remove('hidden');
+
+  // Header
+  document.getElementById('d-title').textContent = client.name;
+  document.getElementById('d-domain').textContent = client.domain;
+  document.getElementById('d-dates').textContent =
+    dateStr(client.primeraOrden) + ' → ' + dateStr(client.ultimaOrden);
+
+  // KPIs del cliente
+  document.getElementById('d-kpis').innerHTML = [
+    { label: 'Órdenes',         value: num(client.ordenes) },
+    { label: 'Comercios',       value: num(client.comercios) },
+    { label: 'Vendedores',      value: num(client.vendedores) },
+    { label: 'Ticket prom.',    value: clpM(client.ordenes ? client.ventaSinIVA / client.ordenes : 0) },
+  ].map(k => `
+    <div class="bg-gray-50 rounded-lg px-4 py-3 text-right">
+      <div class="text-lg font-bold text-gray-900">${k.value}</div>
+      <div class="text-xs text-gray-500">${k.label}</div>
+    </div>
+  `).join('');
+
+  document.getElementById('d-vendedores-total').textContent =
+    num(client.vendedores) + ' vendedores en total';
+
+  renderChart(client);
+  renderMonthlyTable(client);
+  renderSellers(client);
+
+  document.getElementById('detail-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Gráfico ───────────────────────────────────────────────
+function getMetrica() {
+  return document.querySelector('input[name="metrica"]:checked')?.value || 'ventaSinIVA';
+}
+
+function renderChart(client) {
+  if (activeChart) { activeChart.destroy(); activeChart = null; }
+
+  const labels  = client.mensual.map(m => mLabel(m.year, m.month));
+  const metrica = getMetrica();
+
+  let datasets = [];
+  if (metrica === 'ambas') {
+    datasets = [
+      { label: 'Sin IVA', data: client.mensual.map(m => m.ventaSinIVA), backgroundColor: '#2563eb', borderRadius: 4 },
+      { label: 'Con IVA', data: client.mensual.map(m => m.ventaConIVA), backgroundColor: '#93c5fd', borderRadius: 4 },
+    ];
+  } else if (metrica === 'ordenes') {
+    datasets = [{ label: 'Órdenes', data: client.mensual.map(m => m.ordenes), backgroundColor: '#10b981', borderRadius: 4 }];
+  } else {
+    const field = metrica === 'ventaConIVA' ? 'ventaConIVA' : 'ventaSinIVA';
+    const label = metrica === 'ventaConIVA' ? 'Con IVA' : 'Sin IVA';
+    datasets = [{ label, data: client.mensual.map(m => m[field]), backgroundColor: '#2563eb', borderRadius: 4 }];
+  }
+
+  activeChart = new Chart(document.getElementById('monthly-chart'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+      scales: {
+        y: {
+          ticks: { callback: v => metrica === 'ordenes' ? num(v) : clpM(v) },
+          grid: { color: '#f1f5f9' }
+        },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ── Tabla mensual ─────────────────────────────────────────
+function renderMonthlyTable(client) {
+  const totalOrd  = client.mensual.reduce((a, m) => a + m.ordenes, 0);
+  const totalSin  = client.mensual.reduce((a, m) => a + m.ventaSinIVA, 0);
+  const totalCon  = client.mensual.reduce((a, m) => a + m.ventaConIVA, 0);
+
+  document.getElementById('monthly-tbody').innerHTML = client.mensual.map(m => `
+    <tr class="border-t border-gray-50 hover:bg-gray-50">
+      <td class="px-4 py-2.5 font-medium text-gray-800">${mLabel(m.year, m.month)}</td>
+      <td class="px-4 py-2.5 text-right text-gray-700">${num(m.ordenes)}</td>
+      <td class="px-4 py-2.5 text-right font-medium text-gray-900">${clpM(m.ventaSinIVA)}</td>
+      <td class="px-4 py-2.5 text-right text-gray-600">${clpM(m.ventaConIVA)}</td>
+      <td class="px-4 py-2.5 text-right text-gray-600">${clpM(m.ordenes ? m.ventaSinIVA / m.ordenes : 0)}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('monthly-tfoot').innerHTML = `
+    <tr class="border-t-2 border-gray-200">
+      <td class="px-4 py-2.5">Total</td>
+      <td class="px-4 py-2.5 text-right">${num(totalOrd)}</td>
+      <td class="px-4 py-2.5 text-right">${clpM(totalSin)}</td>
+      <td class="px-4 py-2.5 text-right">${clpM(totalCon)}</td>
+      <td class="px-4 py-2.5 text-right">${clpM(totalOrd ? totalSin / totalOrd : 0)}</td>
+    </tr>
+  `;
+}
+
+// ── Vendedores ────────────────────────────────────────────
+function renderSellers(client) {
+  const total = client.ventaSinIVA;
+  document.getElementById('seller-tbody').innerHTML = client.topVendedores.length
+    ? client.topVendedores.map((s, i) => `
+        <tr class="border-t border-gray-50 hover:bg-gray-50">
+          <td class="px-5 py-2.5 text-gray-400 text-xs">${i + 1}</td>
+          <td class="px-5 py-2.5 font-medium text-gray-900">${s.nombre}</td>
+          <td class="px-5 py-2.5 text-gray-400 text-xs hidden md:table-cell">${s.email}</td>
+          <td class="px-5 py-2.5 text-right text-gray-700">${num(s.ordenes)}</td>
+          <td class="px-5 py-2.5 text-right font-medium text-gray-900">${clpM(s.ventaSinIVA)}</td>
+          <td class="px-5 py-2.5 text-right">
+            <div class="flex items-center justify-end gap-2">
+              <div class="w-16 bg-gray-100 rounded-full h-1.5">
+                <div class="bg-blue-500 h-1.5 rounded-full" style="width:${Math.min(100,(s.ventaSinIVA/total*100)).toFixed(1)}%"></div>
+              </div>
+              <span class="text-xs text-gray-500 w-8 text-right">${(s.ventaSinIVA/total*100).toFixed(1)}%</span>
+            </div>
+          </td>
+        </tr>
+      `).join('')
+    : `<tr><td colspan="6" class="px-5 py-6 text-center text-gray-400 text-sm">Sin vendedores registrados</td></tr>`;
+}
+
+// ── Tabs ──────────────────────────────────────────────────
+function setupTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.remove('hidden');
+    });
+  });
+}
+
+// ── Radio métricas ────────────────────────────────────────
+function setupMetricaRadios() {
+  document.querySelectorAll('input[name="metrica"]').forEach(radio => {
+    radio.addEventListener('change', () => { if (activeClient) renderChart(activeClient); });
+  });
+}
+</script>
+</body>
+</html>
