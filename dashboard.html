@@ -81,6 +81,7 @@
         <button class="metric-tab active pb-2 text-sm" data-metric="ventaSinIVA">Ventas</button>
         <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="ordenes">Órdenes</button>
         <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="comerciosActivos">Comercios activos</button>
+        <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="vendedoresActivos">Vendedores activos</button>
       </div>
 
       <!-- Gráfico mensual -->
@@ -321,7 +322,7 @@ function renderChart() {
   const momVals = mn.map((m,i) => i === 0 ? null : mom(mn, i, activeMetric));
 
   const metricLabels = {
-    ventaSinIVA: 'Ventas',
+    ventaSinIVA: 'Ventas', vendedoresActivos: 'Vendedores activos',
     ordenes: 'Pedidos', comerciosActivos: 'Comercios activos'
   };
   const isMoney = activeMetric === 'ventaSinIVA';
