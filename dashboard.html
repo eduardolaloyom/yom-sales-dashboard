@@ -65,7 +65,8 @@
 
     <!-- Header cliente -->
     <div class="card p-5">
-      <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+      <!-- Nombre + período -->
+      <div class="flex items-start justify-between gap-4 mb-3">
         <div>
           <div class="flex items-center gap-2">
             <h2 id="d-name" class="text-xl font-bold text-gray-900"></h2>
@@ -74,11 +75,19 @@
           <p id="d-domain" class="text-xs text-gray-400 mt-0.5"></p>
           <p id="d-period" class="text-xs text-gray-400"></p>
         </div>
-        <div id="d-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
       </div>
 
+      <!-- Selector de período -->
+      <div id="period-selector" class="mb-4 space-y-1.5">
+        <div id="year-pills" class="flex flex-wrap gap-1.5"></div>
+        <div id="month-pills" class="flex flex-wrap gap-1.5 hidden"></div>
+      </div>
+
+      <!-- KPI cards -->
+      <div id="d-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5"></div>
+
       <!-- Tabs métricas -->
-      <div class="flex gap-5 border-b border-gray-100 mb-4">
+      <div class="flex gap-5 border-b border-gray-100 mb-3">
         <button class="metric-tab active pb-2 text-sm" data-metric="ventaSinIVA">Ventas</button>
         <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="ordenes">Órdenes</button>
         <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="comerciosActivos">Comercios activos</button>
@@ -92,7 +101,7 @@
     <!-- Tabla mensual -->
     <div class="card overflow-hidden">
       <div class="px-5 py-3 border-b border-gray-100">
-        <h3 class="font-semibold text-gray-800 text-sm">Desglose mensual — últimos 12 meses</h3>
+        <h3 id="table-title" class="font-semibold text-gray-800 text-sm">Desglose mensual</h3>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm" style="min-width:900px">
@@ -150,6 +159,7 @@ function momBadge(val) {
 
 // ── Estado ────────────────────────────────────────────────
 let activeClient = null, activeChart = null, activeMetric = 'ventaSinIVA';
+let activeFilter = { year: null, month: null };
 
 // ── Init ─────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
@@ -254,6 +264,123 @@ function renderGrid() {
   });
 }
 
+// ── Helpers de período ────────────────────────────────────
+function getFilteredMonths(client, year, month) {
+  if (!year) return client.mensual;
+  if (!month) return client.mensual.filter(m => m.year === year);
+  return client.mensual.filter(m => m.year === year && m.month === month);
+}
+
+function aggregateMonths(months, comerciosRegistrados) {
+  if (!months.length) return null;
+  const n = months.length;
+  const totOrd  = months.reduce((s,m) => s + m.ordenes, 0);
+  const totVen  = months.reduce((s,m) => s + m.ventaSinIVA, 0);
+  const avgCom  = months.reduce((s,m) => s + m.comerciosActivos, 0) / n;
+  const avgVend = months.reduce((s,m) => s + m.vendedoresActivos, 0) / n;
+  return {
+    ordenes:    totOrd,
+    ventaSinIVA: totVen,
+    avgComercios: avgCom,
+    avgVendedores: avgVend,
+    actRate:    comerciosRegistrados > 0 ? avgCom / comerciosRegistrados * 100 : null,
+    ticket:     totOrd > 0 ? totVen / totOrd : 0,
+    ventaXVend: avgVend > 0 ? totVen / avgVend : 0,
+    pedXVend:   avgVend > 0 ? totOrd / avgVend : 0,
+    comXVend:   avgVend > 0 ? avgCom / avgVend : 0,
+    pedXCom:    avgCom  > 0 ? totOrd / avgCom  : 0,
+  };
+}
+
+// ── Selector de período ───────────────────────────────────
+function renderPeriodSelector(client) {
+  const years = [...new Set(client.mensual.map(m => m.year))].sort();
+  const pill  = (label, active, onClick) =>
+    `<button class="period-pill ${active
+      ? 'bg-blue-600 text-white font-semibold'
+      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+    } rounded-full px-3 py-1 text-xs cursor-pointer border-0"
+      onclick="${onClick}">${label}</button>`;
+
+  const noYear = activeFilter.year === null;
+  document.getElementById('year-pills').innerHTML =
+    pill('Todo', noYear, 'setYear(null)') +
+    years.map(y => pill(y, activeFilter.year === y, `setYear(${y})`)).join('');
+
+  const monthPills = document.getElementById('month-pills');
+  if (!activeFilter.year) {
+    monthPills.classList.add('hidden');
+    return;
+  }
+  const availMonths = client.mensual.filter(m => m.year === activeFilter.year).map(m => m.month);
+  monthPills.classList.remove('hidden');
+  monthPills.innerHTML =
+    pill('Año completo', activeFilter.month === null, 'setMonth(null)') +
+    availMonths.map(mo => pill(MONTHS[mo], activeFilter.month === mo, `setMonth(${mo})`)).join('');
+}
+
+function setYear(year) {
+  activeFilter = { year, month: null };
+  renderPeriodSelector(activeClient);
+  applyFilter();
+}
+function setMonth(month) {
+  activeFilter.month = month;
+  renderPeriodSelector(activeClient);
+  applyFilter();
+}
+
+// ── Aplicar filtro ────────────────────────────────────────
+function applyFilter() {
+  const months = getFilteredMonths(activeClient, activeFilter.year, activeFilter.month);
+  const agg    = aggregateMonths(months, activeClient.comerciosRegistrados);
+  renderKPIs(agg, months);
+  renderChart(months);
+  renderTable(months);
+  // Etiqueta período
+  const { year, month } = activeFilter;
+  const label = !year ? 'últimos 12m' : !month ? String(year) : `${MONTHS[month]} ${year}`;
+  document.getElementById('d-period').textContent =
+    dateStr(activeClient.primeraOrden) + ' → ' + dateStr(activeClient.ultimaOrden) + ' · mostrando ' + label;
+  document.getElementById('table-title').textContent = 'Desglose mensual — ' + label;
+}
+
+// ── KPIs del período ──────────────────────────────────────
+function renderKPIs(agg, months) {
+  if (!agg) {
+    document.getElementById('d-kpis').innerHTML = '<div class="col-span-4 text-xs text-gray-400 py-2">Sin datos para el período seleccionado</div>';
+    return;
+  }
+  // MoM: último mes del período vs el anterior en el array completo
+  const lastM = months[months.length - 1];
+  const prevM = lastM ? activeClient.mensual.find(
+    m => (m.year === lastM.year && m.month === lastM.month - 1) ||
+         (m.month === 12 && lastM.month === 1 && m.year === lastM.year - 1)
+  ) : null;
+  const momGMV = lastM && prevM && prevM.ventaSinIVA
+    ? (lastM.ventaSinIVA - prevM.ventaSinIVA) / prevM.ventaSinIVA * 100 : null;
+
+  document.getElementById('d-kpis').innerHTML = [
+    { label: 'Ventas',                  value: clpM(agg.ventaSinIVA),                           sub: 'del período' },
+    { label: 'Pedidos',                 value: num(agg.ordenes),                                sub: 'órdenes procesadas' },
+    { label: 'Vendedores prom./mes',    value: agg.avgVendedores.toFixed(1),                    sub: 'activos promedio mensual' },
+    { label: 'Comercios prom./mes',     value: agg.avgComercios.toFixed(1),                     sub: 'de ' + num(activeClient.comerciosRegistrados) + ' registrados' },
+    { label: 'Var. mes anterior',       value: momBadge(momGMV),                                sub: lastM ? mLabel(lastM.year, lastM.month) : '—' },
+    { label: 'Venta por vendedor',      value: clpM(agg.ventaXVend),                            sub: 'ventas / vendedores prom.' },
+    { label: 'Pedidos por vendedor',    value: agg.pedXVend.toFixed(1) + 'x',                   sub: 'productividad vendedor' },
+    { label: 'Comercios por vendedor',  value: agg.comXVend.toFixed(1),                         sub: 'cobertura promedio' },
+    { label: 'Ticket promedio',         value: clpM(agg.ticket),                                sub: 'ventas / pedidos' },
+    { label: 'Pedidos por comercio',    value: agg.pedXCom.toFixed(1) + 'x',                    sub: 'frecuencia de recompra' },
+    { label: '% Activación',            value: agg.actRate != null ? pct(agg.actRate) : '—',    sub: 'comercios activos prom.' },
+  ].map(k => `
+    <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-right">
+      <div class="text-base font-bold text-gray-900">${k.value}</div>
+      <div class="text-xs text-gray-600 leading-tight">${k.label}</div>
+      <div class="text-xs text-gray-400">${k.sub}</div>
+    </div>
+  `).join('');
+}
+
 // ── Abrir cliente ─────────────────────────────────────────
 function openClient(client) {
   activeClient = client;
@@ -264,58 +391,25 @@ function openClient(client) {
   document.getElementById('detail').classList.remove('hidden');
   document.getElementById('d-name').textContent   = client.name;
   document.getElementById('d-domain').textContent = client.domain;
-  document.getElementById('d-period').textContent = dateStr(client.primeraOrden) + ' → ' + dateStr(client.ultimaOrden) + ' (mostrando últimos 12m)';
 
   // Badge COP si aplica
   const badge = document.getElementById('d-badge');
-  if (client.currency === 'COP') { badge.classList.remove('hidden'); }
-  else { badge.classList.add('hidden'); }
+  if (client.currency === 'COP') badge.classList.remove('hidden');
+  else badge.classList.add('hidden');
 
-  // KPI cards
-  const mn = client.mensual;
-  const lastM = mn[mn.length - 1];
-  const prevM = mn.length > 1 ? mn[mn.length - 2] : null;
-  const momGMV = lastM && prevM && prevM.ventaSinIVA
-    ? (lastM.ventaSinIVA - prevM.ventaSinIVA) / prevM.ventaSinIVA * 100 : null;
-  const actRate12 = client.comerciosRegistrados > 0
-    ? client.mensual.reduce((a,m) => Math.max(a, m.comerciosActivos), 0) / client.comerciosRegistrados * 100 : null;
-  const avgTicket      = client.ordenes    > 0 ? client.ventaSinIVA  / client.ordenes    : 0;
-  const avgFreqCom     = client.comercios  > 0 ? client.ordenes     / client.comercios   : 0;
-  const avgFreqVend    = client.vendedores > 0 ? client.ordenes     / client.vendedores  : 0;
-  const ventaXVendedor = client.vendedores > 0 ? client.ventaSinIVA / client.vendedores  : 0;
-  const comXVendedor   = client.vendedores > 0 ? client.comercios   / client.vendedores  : 0;
+  // Seleccionar por defecto el año más reciente
+  const years = [...new Set(client.mensual.map(m => m.year))].sort();
+  activeFilter = { year: years[years.length - 1] ?? null, month: null };
 
-  document.getElementById('d-kpis').innerHTML = [
-    { label: 'Ventas',                  value: clpM(client.ventaSinIVA),                          sub: 'historial completo' },
-    { label: 'Pedidos totales',        value: num(client.ordenes),                               sub: 'órdenes procesadas' },
-    { label: 'Vendedores activos',     value: num(client.vendedores),                            sub: 'con al menos 1 pedido' },
-    { label: 'Comercios compradores',  value: num(client.comercios),                             sub: 'de ' + num(client.comerciosRegistrados) + ' registrados' },
-    { label: 'Var. mes anterior',      value: momBadge(momGMV),                                  sub: lastM ? mLabel(lastM.year, lastM.month) : 'sin datos recientes' },
-    { label: 'Venta por vendedor',     value: clpM(ventaXVendedor),                              sub: 'ventas / vendedores' },
-    { label: 'Pedidos por vendedor',   value: avgFreqVend.toFixed(1) + 'x',                      sub: 'productividad vendedor' },
-    { label: 'Comercios por vendedor', value: comXVendedor.toFixed(1),                           sub: 'cobertura promedio' },
-    { label: 'Pedido promedio',        value: clpM(avgTicket),                                   sub: 'ventas / pedidos' },
-    { label: 'Pedidos por comercio',   value: avgFreqCom.toFixed(1) + 'x',                       sub: 'frecuencia de compra' },
-    { label: '% Comercios activos',    value: actRate12 != null ? pct(actRate12) : '—',          sub: 'máx. mensual 12m' },
-  ].map(k => `
-    <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-right">
-      <div class="text-base font-bold text-gray-900">${k.value}</div>
-      <div class="text-xs text-gray-600 leading-tight">${k.label}</div>
-      <div class="text-xs text-gray-400">${k.sub}</div>
-    </div>
-  `).join('');
-
-  document.getElementById('d-kpis').className = 'grid grid-cols-2 md:grid-cols-4 gap-2';
-
-  renderChart();
-  renderTable();
+  renderPeriodSelector(client);
+  applyFilter();
   document.getElementById('detail').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 // ── Gráfico ───────────────────────────────────────────────
-function renderChart() {
+function renderChart(mn) {
   if (activeChart) { activeChart.destroy(); activeChart = null; }
-  const mn = activeClient.mensual;
+  if (!mn) mn = getFilteredMonths(activeClient, activeFilter.year, activeFilter.month);
   if (!mn.length) return;
 
   const labels = mn.map(m => mLabel(m.year, m.month));
@@ -390,8 +484,8 @@ function renderChart() {
 }
 
 // ── Tabla mensual ─────────────────────────────────────────
-function renderTable() {
-  const mn = activeClient.mensual;
+function renderTable(mn) {
+  if (!mn) mn = getFilteredMonths(activeClient, activeFilter.year, activeFilter.month);
   const reg = activeClient.comerciosRegistrados;
 
   let totOrd=0, totSin=0;
