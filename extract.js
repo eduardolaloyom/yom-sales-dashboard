@@ -64,7 +64,7 @@ for (const client of CLIENTS) {
   const comerciosRegistrados = db.commerces.countDocuments({ domain, active: true });
 
   // ── Vendedores distintos con orden (all-time) ─────────────
-  const vendedoresRaw = db.orders.distinct('externalSellerIds', { domain, status: statusFilter });
+  const vendedoresRaw = db.orders.distinct('sellerId', { domain, status: statusFilter });
   const vendedores = [...new Set(vendedoresRaw.flat().filter(v => v))].length;
 
   // ── Pipeline 1: métricas mensuales (últimos 12 meses) ─────
@@ -101,14 +101,14 @@ for (const client of CLIENTS) {
   // ── Pipeline 3: vendedores activos por mes (double-group) ──
   const vendedoresMes = db.orders.aggregate([
     { $match: { domain, status: statusFilter, createdAt: { $ne: null },
-      externalSellerIds: { $exists: true, $ne: null, $not: { $size: 0 } },
+      sellerId: { $exists: true, $ne: null, $not: { $size: 0 } },
       $expr: { $gte: [ { $toDate: '$createdAt' }, date12ago ] } } },
-    { $unwind: '$externalSellerIds' },
-    { $match: { externalSellerIds: { $ne: null, $ne: '' } } },
+    { $unwind: '$sellerId' },
+    { $match: { sellerId: { $ne: null, $ne: '' } } },
     { $group: { _id: {
       year:     { $year:  { $toDate: '$createdAt' } },
       month:    { $month: { $toDate: '$createdAt' } },
-      sellerId: '$externalSellerIds'
+      sellerId: '$sellerId'
     }}},
     { $group: {
       _id: { year: '$_id.year', month: '$_id.month' },
