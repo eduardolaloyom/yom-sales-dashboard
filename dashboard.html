@@ -107,6 +107,7 @@
                 <th class="px-4 py-3 text-left whitespace-nowrap w-20">Mes</th>
                 <th class="px-4 py-3 text-right whitespace-nowrap" title="Total de órdenes procesadas en el mes">Pedidos</th>
                 <th class="px-4 py-3 text-right whitespace-nowrap" title="Vendedores distintos con al menos 1 pedido en el mes">Vendedores</th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Total de cuentas de vendedor creadas para este cliente — base facturable de YOM">Ctas. Vend.</th>
                 <th class="px-4 py-3 text-right whitespace-nowrap" title="Comercios distintos que realizaron al menos 1 pedido en el mes">Comercios</th>
                 <th class="px-4 py-3 text-right whitespace-nowrap" title="Comercios activos en el mes vs. total registrados en la plataforma">% Activación</th>
                 <th class="px-4 py-3 text-right whitespace-nowrap" title="Ventas totales del mes (pricing.discountedTotalPrice)">Ventas</th>
@@ -260,7 +261,7 @@ function getFilteredMonths(client, year, month) {
   return client.mensual.filter(m => m.year === year && m.month === month);
 }
 
-function aggregateMonths(months, comerciosRegistrados) {
+function aggregateMonths(months, comerciosRegistrados, cuentasVendedor) {
   if (!months.length) return null;
   const n = months.length;
   const totOrd  = months.reduce((s,m) => s + m.ordenes, 0);
@@ -268,16 +269,17 @@ function aggregateMonths(months, comerciosRegistrados) {
   const avgCom  = months.reduce((s,m) => s + m.comerciosActivos, 0) / n;
   const avgVend = months.reduce((s,m) => s + m.vendedoresActivos, 0) / n;
   return {
-    ordenes:    totOrd,
-    ventaSinIVA: totVen,
-    avgComercios: avgCom,
+    ordenes:       totOrd,
+    ventaSinIVA:   totVen,
+    avgComercios:  avgCom,
     avgVendedores: avgVend,
-    actRate:    comerciosRegistrados > 0 ? avgCom / comerciosRegistrados * 100 : null,
-    ticket:     totOrd > 0 ? totVen / totOrd : 0,
-    ventaXVend: avgVend > 0 ? totVen / avgVend : 0,
-    pedXVend:   avgVend > 0 ? totOrd / avgVend : 0,
-    comXVend:   avgVend > 0 ? avgCom / avgVend : 0,
-    pedXCom:    avgCom  > 0 ? totOrd / avgCom  : 0,
+    actRate:       comerciosRegistrados > 0 ? avgCom / comerciosRegistrados * 100 : null,
+    actRateVend:   cuentasVendedor > 0 ? Math.min(avgVend / cuentasVendedor * 100, 100) : null,
+    ticket:        totOrd > 0 ? totVen / totOrd : 0,
+    ventaXVend:    avgVend > 0 ? totVen / avgVend : 0,
+    pedXVend:      avgVend > 0 ? totOrd / avgVend : 0,
+    comXVend:      avgVend > 0 ? avgCom / avgVend : 0,
+    pedXCom:       avgCom  > 0 ? totOrd / avgCom  : 0,
   };
 }
 
@@ -322,7 +324,7 @@ function setMonth(month) {
 // ── Aplicar filtro ────────────────────────────────────────
 function applyFilter() {
   const months = getFilteredMonths(activeClient, activeFilter.year, activeFilter.month);
-  const agg    = aggregateMonths(months, activeClient.comerciosRegistrados);
+  const agg    = aggregateMonths(months, activeClient.comerciosRegistrados, activeClient.cuentasVendedor);
   renderKPIs(agg, months);
   renderChart(months);
   renderTable(months);
@@ -360,7 +362,7 @@ function renderKPIs(agg, months) {
     { label: 'Ventas último mes',       value: clpM(ventaUltMes),                               sub: lastM ? mLabel(lastM.year, lastM.month) : '—' },
     { label: 'Var. mes anterior',       value: momBadge(momGMV),                                sub: lastM ? mLabel(lastM.year, lastM.month) : '—' },
     { label: 'Ticket promedio',         value: clpM(agg.ticket),                                sub: 'ventas / pedidos' },
-    { label: '% Activación',            value: agg.actRate != null ? pct(agg.actRate) : '—',    sub: 'comercios activos prom.' },
+    { label: '% Act. vendedores',       value: agg.actRateVend != null ? pct(agg.actRateVend) : '—', sub: agg.avgVendedores.toFixed(0) + ' activos de ' + num(activeClient.cuentasVendedor) + ' cuentas' },
     { label: 'Venta por vendedor',      value: clpM(agg.ventaXVend),                            sub: 'ventas / vendedores prom.' },
     { label: 'Pedidos por vendedor',    value: agg.pedXVend.toFixed(1) + 'x',                   sub: 'productividad vendedor' },
     { label: 'Comercios por vendedor',  value: agg.comXVend.toFixed(1),                         sub: 'cobertura promedio' },
@@ -495,6 +497,7 @@ function renderTable(mn) {
       <td class="px-4 py-2.5 font-medium text-gray-800 whitespace-nowrap">${mLabel(m.year, m.month)}</td>
       <td class="px-4 py-2.5 text-right tabular-nums">${num(m.ordenes)}</td>
       <td class="px-4 py-2.5 text-right tabular-nums">${num(m.vendedoresActivos)}</td>
+      <td class="px-4 py-2.5 text-right tabular-nums text-gray-400">${num(activeClient.cuentasVendedor) || '—'}</td>
       <td class="px-4 py-2.5 text-right tabular-nums">${num(m.comerciosActivos)}</td>
       <td class="px-4 py-2.5 text-right">${actPct != null ? pct(actPct) : '—'}</td>
       <td class="px-4 py-2.5 text-right font-medium tabular-nums">${clpM(m.ventaSinIVA)}</td>
@@ -511,6 +514,7 @@ function renderTable(mn) {
     <td class="px-4 py-2.5 text-right tabular-nums">${num(totOrd)}</td>
     <td class="px-4 py-2.5 text-right">—</td>
     <td class="px-4 py-2.5 text-right">—</td>
+    <td class="px-4 py-2.5 text-right tabular-nums text-gray-400">${num(activeClient.cuentasVendedor) || '—'}</td>
     <td class="px-4 py-2.5 text-right">—</td>
     <td class="px-4 py-2.5 text-right tabular-nums">${clpM(totSin)}</td>
     <td class="px-4 py-2.5 text-right">—</td>

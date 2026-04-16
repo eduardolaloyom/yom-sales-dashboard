@@ -63,13 +63,12 @@ for (const client of CLIENTS) {
   // ── Comercios registrados (activos en collection) ─────────
   const comerciosRegistrados = db.commerces.countDocuments({ domain, active: true });
 
+  // ── Cuentas de vendedor creadas (lo que YOM factura) ──────
+  const cuentasVendedor = db.sellers.countDocuments({ domain });
+
   // ── Vendedores activos all-time (sellerId = quienes vendieron) ───────────
   const vendedoresRaw = db.orders.distinct('sellerId', { domain, status: statusFilter });
   const vendedores = [...new Set(vendedoresRaw.flat().filter(v => v))].length;
-
-  // ── Vendedores registrados all-time (externalSellerIds = pool asignado) ──
-  const vendedoresRegRaw = db.orders.distinct('externalSellerIds', { domain, status: statusFilter });
-  const vendedoresRegistrados = [...new Set(vendedoresRegRaw.flat().filter(v => v))].length;
 
   // ── Pipeline 1: métricas mensuales (últimos 12 meses) ─────
   // Usar $expr para soportar createdAt tanto ISODate como string
@@ -120,25 +119,7 @@ for (const client of CLIENTS) {
     }}
   ]).toArray();
 
-  // ── Pipeline 4: vendedores registrados por mes (externalSellerIds) ───────
-  const vendedoresRegMes = db.orders.aggregate([
-    { $match: { domain, status: statusFilter, createdAt: { $ne: null },
-      externalSellerIds: { $exists: true, $ne: null, $not: { $size: 0 } },
-      $expr: { $gte: [ { $toDate: '$createdAt' }, date12ago ] } } },
-    { $unwind: '$externalSellerIds' },
-    { $match: { externalSellerIds: { $ne: null, $ne: '' } } },
-    { $group: { _id: {
-      year:     { $year:  { $toDate: '$createdAt' } },
-      month:    { $month: { $toDate: '$createdAt' } },
-      extId:    '$externalSellerIds'
-    }}},
-    { $group: {
-      _id: { year: '$_id.year', month: '$_id.month' },
-      vendedoresRegistrados: { $sum: 1 }
-    }}
-  ]).toArray();
-
-  // Merge de los cuatro pipelines por year+month
+  // Merge de los tres pipelines por year+month
   const comerciosMesMap = {};
   comerciosMes.forEach(c => {
     comerciosMesMap[`${c._id.year}-${c._id.month}`] = c.comerciosActivos;
@@ -147,31 +128,26 @@ for (const client of CLIENTS) {
   vendedoresMes.forEach(v => {
     vendedoresMesMap[`${v._id.year}-${v._id.month}`] = v.vendedoresActivos;
   });
-  const vendedoresRegMesMap = {};
-  vendedoresRegMes.forEach(v => {
-    vendedoresRegMesMap[`${v._id.year}-${v._id.month}`] = v.vendedoresRegistrados;
-  });
 
   const mensual = metricasMes.map(m => ({
-    year:                   m._id.year,
-    month:                  m._id.month,
-    ordenes:                m.ordenes,
-    ventaSinIVA:            Math.round(m.ventaSinIVA * fxRate),
-    comerciosActivos:       comerciosMesMap[`${m._id.year}-${m._id.month}`]    || 0,
-    vendedoresActivos:      vendedoresMesMap[`${m._id.year}-${m._id.month}`]   || 0,
-    vendedoresRegistrados:  vendedoresRegMesMap[`${m._id.year}-${m._id.month}`] || 0
+    year:             m._id.year,
+    month:            m._id.month,
+    ordenes:          m.ordenes,
+    ventaSinIVA:      Math.round(m.ventaSinIVA * fxRate),
+    comerciosActivos: comerciosMesMap[`${m._id.year}-${m._id.month}`]  || 0,
+    vendedoresActivos: vendedoresMesMap[`${m._id.year}-${m._id.month}`] || 0,
   }));
 
   data.clients.push({
     domain, name, currency, sinDatos: false,
-    ordenes:                totales.ordenes,
+    ordenes:          totales.ordenes,
     comercios,
     comerciosRegistrados,
     vendedores,
-    vendedoresRegistrados,
-    ventaSinIVA:            Math.round(totales.ventaSinIVA * fxRate),
-    primeraOrden:           totales.primeraOrden,
-    ultimaOrden:            totales.ultimaOrden,
+    cuentasVendedor,
+    ventaSinIVA:      Math.round(totales.ventaSinIVA * fxRate),
+    primeraOrden:     totales.primeraOrden,
+    ultimaOrden:      totales.ultimaOrden,
     mensual
   });
 }
