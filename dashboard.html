@@ -55,7 +55,8 @@
     <div class="flex items-center gap-3">
       <span class="text-xs text-gray-400 uppercase font-semibold tracking-wide">Viendo:</span>
       <span id="sticky-client-name" class="text-sm font-bold text-blue-700"></span>
-      <span id="sticky-client-period" class="text-xs text-gray-400"></span>
+      <span class="text-gray-300">·</span>
+      <span id="sticky-client-period" class="text-xs text-gray-500"></span>
     </div>
     <button onclick="document.getElementById('grid-anchor').scrollIntoView({behavior:'smooth'})"
       class="text-xs text-blue-600 hover:text-blue-800 font-medium">
@@ -87,8 +88,7 @@
             <h2 id="d-name" class="text-xl font-bold text-gray-900"></h2>
             <span id="d-badge" class="hidden text-xs font-semibold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">COP→CLP</span>
           </div>
-          <p id="d-domain" class="text-xs text-gray-400 mt-0.5"></p>
-          <p id="d-period" class="text-xs text-gray-400"></p>
+          <p id="d-period" class="text-xs text-gray-400 mt-0.5"></p>
         </div>
       </div>
 
@@ -389,18 +389,21 @@ function renderKPIs(agg, months) {
   const momGMV = lastM && prevM && prevM.ventaSinIVA
     ? (lastM.ventaSinIVA - prevM.ventaSinIVA) / prevM.ventaSinIVA * 100 : null;
 
+  const ventaUltMes = lastM ? lastM.ventaSinIVA : null;
+
   document.getElementById('d-kpis').innerHTML = [
     { label: 'Ventas',                  value: clpM(agg.ventaSinIVA),                           sub: 'del período' },
     { label: 'Pedidos',                 value: num(agg.ordenes),                                sub: 'órdenes procesadas' },
     { label: 'Vendedores prom./mes',    value: agg.avgVendedores.toFixed(1),                    sub: 'activos promedio mensual' },
     { label: 'Comercios prom./mes',     value: agg.avgComercios.toFixed(1),                     sub: 'de ' + num(activeClient.comerciosRegistrados) + ' registrados' },
+    { label: 'Ventas último mes',       value: clpM(ventaUltMes),                               sub: lastM ? mLabel(lastM.year, lastM.month) : '—' },
     { label: 'Var. mes anterior',       value: momBadge(momGMV),                                sub: lastM ? mLabel(lastM.year, lastM.month) : '—' },
+    { label: 'Ticket promedio',         value: clpM(agg.ticket),                                sub: 'ventas / pedidos' },
+    { label: '% Activación',            value: agg.actRate != null ? pct(agg.actRate) : '—',    sub: 'comercios activos prom.' },
     { label: 'Venta por vendedor',      value: clpM(agg.ventaXVend),                            sub: 'ventas / vendedores prom.' },
     { label: 'Pedidos por vendedor',    value: agg.pedXVend.toFixed(1) + 'x',                   sub: 'productividad vendedor' },
     { label: 'Comercios por vendedor',  value: agg.comXVend.toFixed(1),                         sub: 'cobertura promedio' },
-    { label: 'Ticket promedio',         value: clpM(agg.ticket),                                sub: 'ventas / pedidos' },
     { label: 'Pedidos por comercio',    value: agg.pedXCom.toFixed(1) + 'x',                    sub: 'frecuencia de recompra' },
-    { label: '% Activación',            value: agg.actRate != null ? pct(agg.actRate) : '—',    sub: 'comercios activos prom.' },
   ].map(k => `
     <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-right">
       <div class="text-base font-bold text-gray-900">${k.value}</div>
@@ -418,8 +421,7 @@ function openClient(client) {
   if (card) card.classList.add('active');
 
   document.getElementById('detail').classList.remove('hidden');
-  document.getElementById('d-name').textContent   = client.name;
-  document.getElementById('d-domain').textContent = client.domain;
+  document.getElementById('d-name').textContent = client.name;
 
   // Badge COP si aplica
   const badge = document.getElementById('d-badge');
