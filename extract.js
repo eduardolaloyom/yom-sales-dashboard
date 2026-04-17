@@ -73,9 +73,17 @@ for (const client of CLIENTS) {
   // ── Cuentas de vendedor creadas (lo que YOM factura) ──────
   const cuentasVendedor = db.sellers.countDocuments({ domain });
 
-  // ── Vendedores activos all-time (sellerId = quienes vendieron) ───────────
+  // ── Vendedores activos all-time + exclusión de cuentas YOM internas ───────
   const vendedoresRaw = db.orders.distinct('sellerId', { domain, status: statusFilter });
-  const vendedores = [...new Set(vendedoresRaw.flat().filter(v => v))].length;
+  const allVendFlat = [...new Set(vendedoresRaw.flat().filter(v => v))];
+  const yomUsers = db.users.find(
+    { _id: { $in: allVendFlat.map(id => { try { return ObjectId(id); } catch(e) { return null; } }).filter(v => v) },
+      email: { $regex: 'youorder\\.me|yom\\.ai' } },
+    { _id: 1 }
+  ).toArray();
+  const yomSellerIds = yomUsers.map(u => u._id.toString());
+  const yomSellerIdSet = new Set(yomSellerIds);
+  const vendedores = allVendFlat.filter(id => !yomSellerIdSet.has(id)).length;
 
   // ── Pipeline 1: métricas mensuales (últimos 12 meses) ─────
   // Usar $expr para soportar createdAt tanto ISODate como string
@@ -114,7 +122,7 @@ for (const client of CLIENTS) {
       sellerId: { $exists: true, $ne: null, $not: { $size: 0 } },
       $expr: { $gte: [ { $toDate: '$createdAt' }, date12ago ] } } },
     { $unwind: '$sellerId' },
-    { $match: { sellerId: { $ne: null, $ne: '' } } },
+    { $match: { sellerId: { $ne: null, $ne: '', $nin: yomSellerIds } } },
     { $group: { _id: {
       year:     { $year:  { $toDate: '$createdAt' } },
       month:    { $month: { $toDate: '$createdAt' } },
@@ -151,6 +159,7 @@ for (const client of CLIENTS) {
     comercios,
     comerciosRegistrados,
     vendedores,
+    vendedoresYOM:    yomSellerIds.length,
     cuentasVendedor,
     ventaSinIVA:      Math.round(totales.ventaSinIVA * fxRate),
     primeraOrden:     totales.primeraOrden,
