@@ -27,6 +27,14 @@
     .mom-flat     { background: #f1f5f9; color: #64748b; border-radius: 4px; padding: 1px 5px; font-size: 11px; font-weight: 600; }
     ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    #sidebar { transition: width 0.2s ease, min-width 0.2s ease; position: relative; overflow: hidden; }
+    #sidebar.collapsed { width: 32px !important; min-width: 32px !important; }
+    #sidebar.collapsed #sidebar-content { opacity: 0; pointer-events: none; }
+    #sidebar-content { transition: opacity 0.15s ease; }
+    #sidebar-toggle { position: absolute; top: 10px; right: 6px; width: 22px; height: 22px; background: white; border: 1px solid #e2e8f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; font-size: 9px; color: #64748b; box-shadow: 0 1px 3px rgba(0,0,0,.08); transition: transform 0.2s; }
+    #sidebar.collapsed #sidebar-toggle { right: 5px; transform: rotate(180deg); }
+    #client-badge { display: none; position: sticky; top: 0; z-index: 5; background: white; border-radius: 8px; border: 1px solid #e2e8f0; padding: 6px 10px; font-size: 12px; font-weight: 600; color: #1e40af; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.08); align-items: center; gap: 6px; margin-bottom: 4px; }
+    .th-unit { display: block; font-size: 9px; font-weight: 500; text-transform: none; letter-spacing: 0; color: #94a3b8; margin-top: 1px; }
   </style>
 </head>
 <body>
@@ -37,7 +45,7 @@
     <div class="flex items-center gap-3">
       <div class="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">Y</div>
       <span class="font-semibold text-gray-900">YOM Sales</span>
-      <span class="text-xs text-gray-400 hidden sm:block">Legacy Production · Todos los montos en pesos chilenos ($)</span>
+      <span id="hdr-subtitle" class="text-xs text-gray-400 hidden sm:block">Legacy Production · Todos los montos en CLP ($)</span>
     </div>
     <div class="flex items-center gap-4">
       <div id="hdr-gmv" class="text-right hidden md:block">
@@ -53,13 +61,21 @@
 <div style="display:flex; height:calc(100vh - 56px); overflow:hidden;">
 
   <!-- Sidebar clientes -->
-  <aside style="width:200px; min-width:200px; overflow-y:auto; border-right:1px solid #e2e8f0; background:white; padding:10px 8px;">
-    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide px-2 mb-2">Clientes</p>
-    <div id="client-grid" class="flex flex-col gap-1.5"></div>
+  <aside id="sidebar" style="width:200px; min-width:200px; overflow-y:auto; border-right:1px solid #e2e8f0; background:white; padding:10px 8px;">
+    <button id="sidebar-toggle" onclick="toggleSidebar()" title="Mostrar/ocultar clientes">◀</button>
+    <div id="sidebar-content">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide px-2 mb-2 mt-1">Clientes</p>
+      <div id="client-grid" class="flex flex-col gap-1.5"></div>
+    </div>
   </aside>
 
   <!-- Contenido principal -->
   <main style="flex:1; overflow-y:auto; background:#f1f5f9; padding:20px; min-width:0; display:flex; flex-direction:column; gap:16px;">
+
+    <!-- Badge cliente (visible cuando sidebar colapsado) -->
+    <div id="client-badge" onclick="toggleSidebar()">
+      <span>≡</span><span id="badge-name">—</span>
+    </div>
 
     <!-- KPIs Globales -->
     <div id="global-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
@@ -105,17 +121,17 @@
             <thead class="bg-gray-50">
               <tr>
                 <th class="px-4 py-3 text-left whitespace-nowrap w-20">Mes</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Total de órdenes procesadas en el mes">Pedidos</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Vendedores distintos con al menos 1 pedido en el mes">Vendedores</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Total de cuentas de vendedor creadas para este cliente — base facturable de YOM">Ctas. Vend.</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Comercios distintos que realizaron al menos 1 pedido en el mes">Comercios</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Comercios activos en el mes vs. total registrados en la plataforma">% Activación</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Ventas totales del mes (pricing.discountedTotalPrice)">Ventas</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Ventas del mes divididas entre vendedores activos">Venta / vendedor</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Ticket promedio: ventas divididas entre número de pedidos">Ticket promedio</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Pedidos del mes divididos entre vendedores activos — productividad por vendedor">Pedidos / vendedor</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Pedidos del mes divididos entre comercios activos — frecuencia de recompra">Pedidos / comercio</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Variación porcentual de ventas respecto al mes anterior">Var. vs mes ant.</th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Total de órdenes procesadas en el mes">Pedidos<span class="th-unit">unidades</span></th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Vendedores distintos con al menos 1 pedido en el mes">Vendedores<span class="th-unit">activos</span></th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Total de cuentas de vendedor creadas para este cliente — base facturable de YOM">Ctas. Vend.<span class="th-unit">registradas</span></th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Comercios distintos que realizaron al menos 1 pedido en el mes">Comercios<span class="th-unit">activos</span></th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Comercios activos en el mes vs. total registrados en la plataforma">% Activación<span class="th-unit">activos / reg.</span></th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Ventas totales del mes sin IVA (pricing.discountedTotalPrice)" id="th-ventas">Ventas<span class="th-unit" id="th-ventas-unit">CLP</span></th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Ventas del mes divididas entre vendedores activos" id="th-ventavend">Venta / vend.<span class="th-unit" id="th-ventavend-unit">CLP / vendedor</span></th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Ticket promedio: ventas divididas entre número de pedidos" id="th-ticket">Ticket prom.<span class="th-unit" id="th-ticket-unit">CLP / pedido</span></th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Pedidos del mes divididos entre vendedores activos — productividad por vendedor">Ped. / vend.<span class="th-unit">ped. × vendedor</span></th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Pedidos del mes divididos entre comercios activos — frecuencia de recompra">Ped. / comercio<span class="th-unit">ped. × comercio</span></th>
+                <th class="px-4 py-3 text-right whitespace-nowrap" title="Variación porcentual de ventas respecto al mes anterior">Var. vs ant.<span class="th-unit">% ventas</span></th>
               </tr>
             </thead>
             <tbody id="monthly-tbody"></tbody>
@@ -159,6 +175,35 @@ function momBadge(val) {
 // ── Estado ────────────────────────────────────────────────
 let activeClient = null, activeChart = null, activeMetric = 'ventaSinIVA';
 let activeFilter = { year: null, month: null };
+let sidebarOpen = true;
+
+// ── Sidebar toggle ────────────────────────────────────────
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  const aside = document.getElementById('sidebar');
+  const badge = document.getElementById('client-badge');
+  if (sidebarOpen) {
+    aside.classList.remove('collapsed');
+    badge.style.display = 'none';
+  } else {
+    aside.classList.add('collapsed');
+    badge.style.display = 'flex';
+  }
+}
+
+// ── Formatter de moneda según cliente activo ──────────────
+function fmtCM(n) {
+  const cur = activeClient ? activeClient.currency : 'CLP';
+  if (n == null) return '—';
+  const sym = cur === 'USD' ? 'US$' : '$';
+  const abs = Math.abs(n);
+  if (abs >= 1e12) return sym + (n/1e12).toFixed(2) + 'T';
+  if (abs >= 1e9)  return sym + (n/1e9).toFixed(1)  + 'B';
+  if (abs >= 1e6)  return sym + (n/1e6).toFixed(1)  + 'M';
+  if (abs >= 1e3)  return sym + (n/1e3).toFixed(0)  + 'K';
+  return new Intl.NumberFormat(cur === 'USD' ? 'en-US' : 'es-CL',
+    { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(n);
+}
 
 // ── Init ─────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
@@ -355,15 +400,15 @@ function renderKPIs(agg, months) {
   const ventaUltMes = lastM ? lastM.ventaSinIVA : null;
 
   document.getElementById('d-kpis').innerHTML = [
-    { label: 'Ventas',                  value: clpM(agg.ventaSinIVA),                           sub: 'del período' },
+    { label: 'Ventas',                  value: fmtCM(agg.ventaSinIVA),                          sub: 'del período' },
     { label: 'Pedidos',                 value: num(agg.ordenes),                                sub: 'órdenes procesadas' },
     { label: 'Vendedores prom./mes',    value: agg.avgVendedores.toFixed(1),                    sub: 'activos promedio mensual' },
     { label: 'Comercios prom./mes',     value: agg.avgComercios.toFixed(1),                     sub: 'de ' + num(activeClient.comerciosRegistrados) + ' registrados' },
-    { label: 'Ventas último mes',       value: clpM(ventaUltMes),                               sub: lastM ? mLabel(lastM.year, lastM.month) : '—' },
+    { label: 'Ventas último mes',       value: fmtCM(ventaUltMes),                              sub: lastM ? mLabel(lastM.year, lastM.month) : '—' },
     { label: 'Var. mes anterior',       value: momBadge(momGMV),                                sub: lastM ? mLabel(lastM.year, lastM.month) : '—' },
-    { label: 'Ticket promedio',         value: clpM(agg.ticket),                                sub: 'ventas / pedidos' },
+    { label: 'Ticket promedio',         value: fmtCM(agg.ticket),                               sub: 'ventas / pedidos' },
     { label: '% Act. vendedores',       value: agg.actRateVend != null ? pct(agg.actRateVend) : '—', sub: agg.avgVendedores.toFixed(0) + ' activos de ' + num(activeClient.cuentasVendedor) + ' cuentas' },
-    { label: 'Venta por vendedor',      value: clpM(agg.ventaXVend),                            sub: 'ventas / vendedores prom.' },
+    { label: 'Venta por vendedor',      value: fmtCM(agg.ventaXVend),                           sub: 'ventas / vendedores prom.' },
     { label: 'Pedidos por vendedor',    value: agg.pedXVend.toFixed(1) + 'x',                   sub: 'productividad vendedor' },
     { label: 'Comercios por vendedor',  value: agg.comXVend.toFixed(1),                         sub: 'cobertura promedio' },
     { label: 'Pedidos por comercio',    value: agg.pedXCom.toFixed(1) + 'x',                    sub: 'frecuencia de recompra' },
@@ -391,6 +436,15 @@ function openClient(client) {
   const badge = document.getElementById('d-badge');
   if (client.currency === 'COP') badge.classList.remove('hidden');
   else badge.classList.add('hidden');
+
+  // Badge flotante (sidebar colapsado) y subtitle moneda
+  document.getElementById('badge-name').textContent = client.name;
+  const cur = client.currency || 'CLP';
+  document.getElementById('hdr-subtitle').textContent =
+    'Legacy Production · Montos en ' + cur + ' (' + (cur === 'USD' ? 'US$' : '$') + ')';
+  const curLabel = cur + ' / pedido';
+  const el = document.getElementById('th-ventas-unit');
+  if (el) { el.textContent = cur; document.getElementById('th-ventavend-unit').textContent = cur + ' / vend.'; document.getElementById('th-ticket-unit').textContent = curLabel; }
 
   // Seleccionar por defecto el año más reciente
   const years = [...new Set(client.mensual.map(m => m.year))].sort();
@@ -500,9 +554,9 @@ function renderTable(mn) {
       <td class="px-4 py-2.5 text-right tabular-nums text-gray-400">${num(activeClient.cuentasVendedor) || '—'}</td>
       <td class="px-4 py-2.5 text-right tabular-nums">${num(m.comerciosActivos)}</td>
       <td class="px-4 py-2.5 text-right">${actPct != null ? pct(actPct) : '—'}</td>
-      <td class="px-4 py-2.5 text-right font-medium tabular-nums">${clpM(m.ventaSinIVA)}</td>
-      <td class="px-4 py-2.5 text-right tabular-nums">${clpM(ventaVend)}</td>
-      <td class="px-4 py-2.5 text-right tabular-nums">${clpM(ticket)}</td>
+      <td class="px-4 py-2.5 text-right font-medium tabular-nums">${fmtCM(m.ventaSinIVA)}</td>
+      <td class="px-4 py-2.5 text-right tabular-nums">${fmtCM(ventaVend)}</td>
+      <td class="px-4 py-2.5 text-right tabular-nums">${fmtCM(ticket)}</td>
       <td class="px-4 py-2.5 text-right tabular-nums">${freqVend.toFixed(1)}x</td>
       <td class="px-4 py-2.5 text-right tabular-nums">${freqCom.toFixed(1)}x</td>
       <td class="px-4 py-2.5 text-right">${momBadge(momVal)}</td>
@@ -516,9 +570,9 @@ function renderTable(mn) {
     <td class="px-4 py-2.5 text-right">—</td>
     <td class="px-4 py-2.5 text-right tabular-nums text-gray-400">${num(activeClient.cuentasVendedor) || '—'}</td>
     <td class="px-4 py-2.5 text-right">—</td>
-    <td class="px-4 py-2.5 text-right tabular-nums">${clpM(totSin)}</td>
+    <td class="px-4 py-2.5 text-right tabular-nums">${fmtCM(totSin)}</td>
     <td class="px-4 py-2.5 text-right">—</td>
-    <td class="px-4 py-2.5 text-right tabular-nums">${clpM(totOrd > 0 ? totSin/totOrd : 0)}</td>
+    <td class="px-4 py-2.5 text-right tabular-nums">${fmtCM(totOrd > 0 ? totSin/totOrd : 0)}</td>
     <td class="px-4 py-2.5 text-right">—</td>
     <td class="px-4 py-2.5 text-right">—</td>
     <td class="px-4 py-2.5 text-right">—</td>
