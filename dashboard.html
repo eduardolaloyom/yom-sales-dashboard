@@ -602,7 +602,7 @@ function renderChart(mn) {
         tooltip: {
           callbacks: {
             label: ctx => {
-              if (ctx.datasetIndex === 0) return ` ${metricLabels[activeMetric]}: ${isMoney ? clpM(ctx.raw) : num(ctx.raw)}`;
+              if (ctx.datasetIndex === 0) return ` ${metricLabels[activeMetric]}: ${isMoney ? fmtCM(ctx.raw) : num(ctx.raw)}`;
               if (ctx.raw == null) return null;
               return ` Var. mensual: ${ctx.raw >= 0 ? '+' : ''}${ctx.raw.toFixed(1)}%`;
             }
@@ -613,7 +613,7 @@ function renderChart(mn) {
         y: {
           position: 'left',
           grid: { color: '#f1f5f9' },
-          ticks: { callback: v => isMoney ? clpM(v) : num(v), font: { size: 11 } }
+          ticks: { callback: v => isMoney ? fmtCM(v) : num(v), font: { size: 11 } }
         },
         y2: {
           position: 'right',
