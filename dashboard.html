@@ -507,6 +507,8 @@ function renderCurrencyPills(nativeCur) {
 // ── Abrir cliente ─────────────────────────────────────────
 function openClient(client, resetFilter = true) {
   activeClient = client;
+  const mainEl = document.querySelector('main');
+  const savedScroll = resetFilter ? 0 : mainEl.scrollTop;
 
   // Expandir grupo si el cliente está en uno colapsado
   const clientGroup = GROUPS.find(g => g.domains.includes(client.domain));
@@ -535,11 +537,16 @@ function openClient(client, resetFilter = true) {
   if (resetFilter) {
     const years = [...new Set(client.mensual.map(m => m.year))].sort();
     activeFilter = { year: years[years.length - 1] ?? null, month: null };
-    document.querySelector('main').scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   renderPeriodSelector(client);
   applyFilter();
+
+  if (resetFilter) {
+    mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    requestAnimationFrame(() => mainEl.scrollTo({ top: savedScroll, behavior: 'instant' }));
+  }
 }
 
 // ── Gráfico ───────────────────────────────────────────────
