@@ -484,6 +484,7 @@ function renderKPIs(agg, months) {
 function renderCurrencyPills(nativeCur) {
   const currencies = ['USD'];
   if (nativeCur && nativeCur !== 'USD') currencies.push(nativeCur);
+  if (nativeCur && nativeCur !== 'CLP' && nativeCur !== 'USD') currencies.push('CLP');
   const container = document.getElementById('currency-pills');
   container.innerHTML = currencies.map(cur =>
     `<button class="currency-pill px-2 py-0.5 rounded text-xs font-semibold border
