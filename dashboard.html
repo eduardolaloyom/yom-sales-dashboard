@@ -1048,9 +1048,14 @@
       acc.vendedores += m.vendedores;
       return acc;
     }, { ventas: 0, pedidos: 0, comercios: 0, vendedores: 0 });
+    const activeM = months.filter((m) => m.vendedores > 0 && m.ventas > 0);
+    const activeCom = months.filter((m) => m.comercios > 0);
     const avg = {
       ticket: total.pedidos > 0 ? total.ventas / total.pedidos : 0,
       actCom: months.length ? months.reduce((s, m) => s + (m.registradosCom ? m.comercios / m.registradosCom : 0), 0) / months.length : 0,
+      ventaVend: activeM.length ? activeM.reduce((s, m) => s + m.ventas / m.vendedores, 0) / activeM.length : 0,
+      pedVend: activeM.length ? activeM.reduce((s, m) => s + m.pedidos / m.vendedores, 0) / activeM.length : 0,
+      pedCom: activeCom.length ? activeCom.reduce((s, m) => s + m.pedidos / m.comercios, 0) / activeCom.length : 0,
     };
 
     const rows = months.map((m, i) => {
@@ -1132,10 +1137,10 @@
                   <td class="px-4 py-3 text-right">${fmtNum(Math.round(total.comercios / Math.max(months.length,1)))}</td>
                   <td class="px-4 py-3 text-right">${fmtPct(avg.actCom, 1)}</td>
                   <td class="px-4 py-3 text-right text-slate-900">${fmtUSD(total.ventas)}</td>
-                  <td class="px-4 py-3 text-right">—</td>
+                  <td class="px-4 py-3 text-right">${avg.ventaVend > 0 ? fmtUSD(avg.ventaVend) : "—"}</td>
                   <td class="px-4 py-3 text-right">${fmtUSD(avg.ticket, { compact: false })}</td>
-                  <td class="px-4 py-3 text-right">—</td>
-                  <td class="px-4 py-3 text-right">—</td>
+                  <td class="px-4 py-3 text-right">${avg.pedVend > 0 ? avg.pedVend.toFixed(1) : "—"}</td>
+                  <td class="px-4 py-3 text-right">${avg.pedCom > 0 ? avg.pedCom.toFixed(1) : "—"}</td>
                   <td class="px-4 py-3 text-right">—</td>
                 ` : `
                   <td class="px-4 py-3 text-right text-slate-900">${fmtUSD(total.ventas)}</td>
