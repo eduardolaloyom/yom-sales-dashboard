@@ -1,689 +1,1493 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>YOM Sales Dashboard</title>
+<html lang="es"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>YOM Sales · Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="data.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; background: #f1f5f9; }
-    .card { background: white; border-radius: 12px; border: 1px solid #e2e8f0; }
-    .client-card { cursor: pointer; transition: all 0.15s; }
-    .client-card:hover { border-color: #3b82f6; box-shadow: 0 4px 12px rgba(59,130,246,0.12); transform: translateY(-1px); }
-    .client-card.active { border-color: #2563eb; background: #eff6ff; }
-    .client-card.no-data { opacity: 0.45; cursor: default; pointer-events: none; }
-    .up   { color: #16a34a; }
-    .down { color: #dc2626; }
-    .flat { color: #94a3b8; }
-    #chart-wrap { position: relative; height: 280px; }
-    .metric-tab { transition: all 0.12s; border-bottom: 2px solid transparent; }
-    .metric-tab.active { border-bottom-color: #2563eb; color: #2563eb; font-weight: 600; }
-    th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
-    th[title] { cursor: help; border-bottom: 1px dashed #cbd5e1; }
-    .mom-positive { background: #dcfce7; color: #15803d; border-radius: 4px; padding: 1px 5px; font-size: 11px; font-weight: 600; }
-    .mom-negative { background: #fee2e2; color: #b91c1c; border-radius: 4px; padding: 1px 5px; font-size: 11px; font-weight: 600; }
-    .mom-flat     { background: #f1f5f9; color: #64748b; border-radius: 4px; padding: 1px 5px; font-size: 11px; font-weight: 600; }
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-    #sidebar { transition: width 0.2s ease, min-width 0.2s ease; position: relative; overflow: hidden; }
-    #sidebar.collapsed { width: 32px !important; min-width: 32px !important; }
-    #sidebar.collapsed #sidebar-content { opacity: 0; pointer-events: none; }
-    #sidebar-content { transition: opacity 0.15s ease; }
-    #sidebar-toggle { position: absolute; top: 10px; right: 6px; width: 22px; height: 22px; background: white; border: 1px solid #e2e8f0; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; font-size: 9px; color: #64748b; box-shadow: 0 1px 3px rgba(0,0,0,.08); transition: transform 0.2s; }
-    #sidebar.collapsed #sidebar-toggle { right: 5px; transform: rotate(180deg); }
-    #client-badge { display: none; position: sticky; top: 0; z-index: 5; background: white; border-radius: 8px; border: 1px solid #e2e8f0; padding: 6px 10px; font-size: 12px; font-weight: 600; color: #1e40af; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.08); align-items: center; gap: 6px; margin-bottom: 4px; }
-    .th-unit { display: block; font-size: 9px; font-weight: 500; text-transform: none; letter-spacing: 0; color: #94a3b8; margin-top: 1px; }
+    :root {
+      --yom-primary: #613BC0;
+      --yom-soft: #F9F7FF;
+      --yom-green: #61CE70;
+      --yom-peach: #FFBC7D;
+    }
+    html, body { height: 100%; }
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: #F8FAFC;
+      color: #0F172A;
+      -webkit-font-smoothing: antialiased;
+      font-feature-settings: "tnum" 0;
+    }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    /* subtle custom scrollbar */
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; border: 2px solid #F8FAFC; }
+    ::-webkit-scrollbar-thumb:hover { background: #CBD5E1; }
+
+    .border-slate-150 { border-color: #ECEFF4; }
+    button:focus-visible, [data-tab]:focus-visible, select:focus-visible {
+      outline: 2px solid #613BC0;
+      outline-offset: 2px;
+      border-radius: 8px;
+    }
   </style>
 </head>
-<body>
-
-<!-- Topbar -->
-<header class="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
-  <div class="max-w-screen-xl mx-auto px-6 h-14 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">Y</div>
-      <span class="font-semibold text-gray-900">YOM Sales</span>
-      <span id="hdr-subtitle" class="text-xs text-gray-400 hidden sm:block">Legacy Production · Montos en USD (US$)</span>
-    </div>
-    <div class="flex items-center gap-4">
-      <div id="hdr-gmv" class="text-right hidden md:block">
-        <div class="font-bold text-gray-900 text-sm" id="hdr-total">—</div>
-        <div class="text-xs text-gray-400">Ventas (12m)</div>
+<body class="min-h-screen">
+  
+  <!-- Topbar -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
+    <div class="mx-auto flex items-center gap-6 px-5 lg:px-8 py-3" style="max-width: 1760px;">
+      <!-- Logo -->
+      <div class="flex items-center gap-3 pr-4 border-r border-slate-200 min-w-[220px]">
+        <div class="h-9 w-9 rounded-lg flex items-center justify-center font-bold text-white text-[15px]" style="background: linear-gradient(135deg, #613BC0 0%, #7A56D6 100%);">Y</div>
+        <div class="leading-tight">
+          <div class="text-[14px] font-semibold text-slate-900">YOM Sales</div>
+          <div class="text-[10px] text-slate-500 tracking-wider uppercase">Internal · Growth</div>
+        </div>
       </div>
-      <div id="currency-pills" class="hidden items-center gap-1"></div>
-      <div class="text-xs text-gray-400" id="hdr-ts">—</div>
+
+      <!-- Tabs -->
+      <nav id="topbar-tabs" class="flex items-center gap-1"></nav>
+
+      <!-- Right meta -->
+      <div id="topbar-meta" class="ml-auto flex items-center gap-3"></div>
     </div>
+  </header>
+
+  <!-- Main layout: sidebar + content -->
+  <div class="flex items-start">
+    <aside id="sidebar" class="sticky top-[61px] self-start shrink-0 w-[240px] bg-white border-r border-slate-200 h-[calc(100vh-61px)]"></aside>
+    <main id="main" class="flex-1 min-w-0"></main>
   </div>
-</header>
 
-<!-- Layout sidebar + main -->
-<div style="display:flex; height:calc(100vh - 56px); overflow:hidden;">
+  <script src="data.js"></script>
+<script>
+// ---- Adapter: reshape YOM_DATA generated by extract.js into the schema the dashboard expects ----
+(function () {
+  const OLD = window.YOM_DATA;
+  if (!OLD) return;
 
-  <!-- Sidebar clientes -->
-  <aside id="sidebar" style="width:200px; min-width:200px; overflow-y:auto; border-right:1px solid #e2e8f0; background:white; padding:10px 8px;">
-    <button id="sidebar-toggle" onclick="toggleSidebar()" title="Mostrar/ocultar clientes">◀</button>
-    <div id="sidebar-content">
-      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide px-2 mb-2 mt-1">Clientes</p>
-      <div id="client-grid" class="flex flex-col gap-1.5"></div>
-    </div>
-  </aside>
+  const GROUPS = [
+    { id: 'soprole',     name: 'Grupo Soprole',     domains: ['soprole.youorder.me', 'sonrie.youorder.me'] },
+    { id: 'surtiventas', name: 'Grupo Surtiventas', domains: ['surtiventas.youorder.me', 'prisa.youorder.me', 'prisur.youorder.me'] },
+  ];
+  const domainToGroup = {};
+  GROUPS.forEach(g => g.domains.forEach(d => { domainToGroup[d] = g.id; }));
 
-  <!-- Contenido principal -->
-  <main style="flex:1; overflow-y:auto; background:#f1f5f9; padding:20px; min-width:0; display:flex; flex-direction:column; gap:16px;">
+  const COUNTRY = {
+    'codelpa-peru.youorder.me': 'PE',
+    'coexito.youorder.me': 'CO',
+    'surtiventas.youorder.me': 'CO',
+    'prisa.youorder.me': 'CO',
+    'prisur.youorder.me': 'CO',
+  };
+  const inferCountry = (d, native) => COUNTRY[d] || (native === 'COP' ? 'CO' : 'CL');
 
-    <!-- Badge cliente (visible cuando sidebar colapsado) -->
-    <div id="client-badge" onclick="toggleSidebar()">
-      <span>≡</span><span id="badge-name">—</span>
-    </div>
+  const fxRates = {
+    USD: 1,
+    CLP: (OLD.fxRates && OLD.fxRates.CLP_TO_USD) ? 1 / OLD.fxRates.CLP_TO_USD : 952,
+    COP: (OLD.fxRates && OLD.fxRates.COP_TO_USD) ? 1 / OLD.fxRates.COP_TO_USD : 4167,
+  };
 
-    <!-- KPIs Globales -->
-    <div id="global-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+  const clients = (OLD.clients || []).map(c => {
+    const native = c.nativeCurrency || 'CLP';
+    const group = domainToGroup[c.domain] || null;
+    const country = inferCountry(c.domain, native);
+    if (c.sinDatos) {
+      return { id: c.domain, name: c.name, group, country, currency: native, status: 'nodata', mensual: [] };
+    }
+    const mensual = (c.mensual || []).map(m => ({
+      month: m.year + '-' + String(m.month).padStart(2, '0'),
+      ventas: m.ventaSinIVA,
+      pedidos: m.ordenes,
+      comercios: m.comerciosActivos,
+      vendedores: m.vendedoresActivos,
+      registradosVend: c.cuentasVendedor || 0,
+      registradosCom: c.comerciosRegistrados || 0,
+      ticket: m.ordenes > 0 ? m.ventaSinIVA / m.ordenes : 0,
+    }));
+    return {
+      id: c.domain, name: c.name, group, country, currency: native,
+      firstOrder: c.primeraOrden, lastOrder: c.ultimaOrden,
+      status: 'active',
+      mensual,
+    };
+  });
 
-    <!-- Detalle cliente -->
-    <div id="detail" class="hidden" style="flex-direction:column; gap:16px;">
+  const active = clients.filter(x => x.status !== 'nodata' && x.mensual.length);
+  const gmv12m = active.reduce((s, c) => s + c.mensual.reduce((ss, m) => ss + m.ventas, 0), 0);
+  const pedidos12m = active.reduce((s, c) => s + c.mensual.reduce((ss, m) => ss + m.pedidos, 0), 0);
+  const comerciosActivos = active.reduce((s, c) => {
+    const last = c.mensual[c.mensual.length - 1];
+    return s + (last ? last.comercios : 0);
+  }, 0);
+  const comerciosRegistrados = active.reduce((s, c) => s + ((c.mensual[c.mensual.length - 1] || {}).registradosCom || 0), 0);
 
-      <!-- Header + KPIs + Gráfico -->
-      <div class="card p-5">
-        <div class="flex items-center gap-2 mb-0.5">
-          <h2 id="d-name" class="text-xl font-bold text-gray-900"></h2>
-          <span id="d-badge" class="hidden text-xs font-semibold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">COP→CLP</span>
-        </div>
-        <p id="d-period" class="text-xs text-gray-400 mb-3"></p>
+  window.YOM_DATA = {
+    extractedAt: OLD.extractedAt,
+    fxRates,
+    clients,
+    globals: {
+      gmv12m, pedidos12m, comerciosActivos, comerciosRegistrados,
+      clientesActivos: active.length,
+      clientesTotal: clients.length,
+    },
+    groups: GROUPS.map(g => ({ id: g.id, name: g.name, members: g.domains })),
+  };
+})();
+</script>
+<script>
+// YOM Sales Dashboard — app logic
+(function () {
+  "use strict";
 
-        <!-- Selector de período -->
-        <div id="period-selector" class="mb-4 space-y-1.5">
-          <div id="year-pills" class="flex flex-wrap gap-1.5"></div>
-          <div id="month-pills" class="flex flex-wrap gap-1.5 hidden"></div>
-        </div>
+  const DATA = window.YOM_DATA;
+  const fmtMoney = (n, opts = {}) => {
+    if (n == null || isNaN(n)) return "—";
+    const cur = opts.currency || state.displayCurrency || "USD";
+    const rate = (DATA.fxRates && DATA.fxRates[cur]) || 1;
+    const val = n * rate;
+    const abs = Math.abs(val);
+    const sym = cur === "USD" ? "US$" : "$";
+    if (opts.compact !== false) {
+      if (abs >= 1e9) return sym + (val / 1e9).toFixed(1) + "B";
+      if (abs >= 1e6) return sym + (val / 1e6).toFixed(1) + "M";
+      if (abs >= 1e3) return sym + (val / 1e3).toFixed(0) + "K";
+    }
+    return sym + val.toLocaleString(cur === "USD" ? "en-US" : "es-CL", { maximumFractionDigits: 0 });
+  };
+  const fmtUSD = fmtMoney;
+  const fmtNum = (n) => (n == null || isNaN(n) ? "—" : n.toLocaleString("es-CL"));
+  const fmtPct = (n, digits = 1) => (n == null || isNaN(n) ? "—" : `${(n * 100).toFixed(digits)}%`);
+  const monthShort = (ym) => {
+    const [y, m] = ym.split("-").map(Number);
+    const names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    return `${names[m - 1]} ${String(y).slice(2)}`;
+  };
 
-        <!-- KPI cards -->
-        <div id="d-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-5"></div>
+  // ---------- State ----------
+  const state = {
+    view: "overview", // overview | cliente | comparativa
+    selectedClient: null, // id (domain)
+    compareIds: [],
+    rankingSort: "gmv", // gmv | mom
+    hideNoData: true,
+    displayCurrency: "USD",
+    compareMetric: "ventas",
+    clienteMetric: "ventas",
+    cliPeriod: "todo",
+    opsOpen: false,
+    allColumns: false,
+  };
+  // Init compareIds to first 4 active clients (by domain)
+  (function initCompare() {
+    const active = DATA.clients.filter(c => c.status !== "nodata" && c.mensual && c.mensual.length);
+    state.compareIds = active.slice(0, 4).map(c => c.id);
+  })();
 
-        <!-- Tabs métricas -->
-        <div class="flex gap-5 border-b border-gray-100 mb-3">
-          <button class="metric-tab active pb-2 text-sm" data-metric="ventaSinIVA">Ventas</button>
-          <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="ordenes">Órdenes</button>
-          <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="comerciosActivos">Comercios activos</button>
-          <button class="metric-tab pb-2 text-sm text-gray-500" data-metric="vendedoresActivos">Vendedores activos</button>
-        </div>
+  // ---------- Derived helpers ----------
+  function clientById(id) {
+    return DATA.clients.find((c) => c.id === id);
+  }
+  function clientGmv12m(c) {
+    if (!c.mensual || c.mensual.length === 0) return 0;
+    return c.mensual.reduce((s, m) => s + m.ventas, 0);
+  }
+  function clientLastMonth(c) {
+    if (!c.mensual || c.mensual.length === 0) return null;
+    return c.mensual[c.mensual.length - 1];
+  }
+  function clientPrevMonth(c) {
+    if (!c.mensual || c.mensual.length < 2) return null;
+    return c.mensual[c.mensual.length - 2];
+  }
+  function clientMoM(c) {
+    const last = clientLastMonth(c);
+    const prev = clientPrevMonth(c);
+    if (!last || !prev || prev.ventas === 0) return null;
+    return (last.ventas - prev.ventas) / prev.ventas;
+  }
+  function isCurrentCalendarMonth(ym) {
+    const ref = DATA.extractedAt ? new Date(DATA.extractedAt) : new Date();
+    const refYM = ref.getFullYear() + "-" + String(ref.getMonth() + 1).padStart(2, "0");
+    return ym === refYM;
+  }
+  function clientLastClosedMonth(c) {
+    if (!c.mensual || c.mensual.length === 0) return null;
+    const lastIdx = c.mensual.length - 1;
+    const last = c.mensual[lastIdx];
+    if (isCurrentCalendarMonth(last.month) && c.mensual.length >= 2) return c.mensual[lastIdx - 1];
+    return last;
+  }
+  function clientPrevClosedMonth(c) {
+    if (!c.mensual || c.mensual.length === 0) return null;
+    const lastIdx = c.mensual.length - 1;
+    const off = isCurrentCalendarMonth(c.mensual[lastIdx].month) ? 2 : 1;
+    if (c.mensual.length <= off) return null;
+    return c.mensual[lastIdx - off];
+  }
+  function clientMoMClosed(c) {
+    const last = clientLastClosedMonth(c);
+    const prev = clientPrevClosedMonth(c);
+    if (!last || !prev || prev.ventas === 0) return null;
+    return (last.ventas - prev.ventas) / prev.ventas;
+  }
+  function clientAvgActive(c, key) {
+    if (!c.mensual || c.mensual.length === 0) return 0;
+    const active = c.mensual.filter((m) => m.ventas > 0);
+    if (active.length === 0) return 0;
+    return active.reduce((s, m) => s + (m[key] || 0), 0) / active.length;
+  }
+  function clientStatus(c) {
+    if (c.status === "nodata") return "nodata";
+    const mom = clientMoMClosed(c) != null ? clientMoMClosed(c) : clientMoM(c);
+    if (mom == null) return "stable";
+    if (mom <= -0.15) return "falling";
+    if (mom >= 0.10) return "growing";
+    return "stable";
+  }
 
-        <div id="chart-wrap"><canvas id="chart"></canvas></div>
+  // ---------- Sparkline renderer (SVG, no axes) ----------
+  function sparkline(values, { w = 100, h = 24, stroke = "#613BC0", fill = "none" } = {}) {
+    if (!values || values.length === 0) return "";
+    const max = Math.max(...values, 1);
+    const min = Math.min(...values, 0);
+    const range = max - min || 1;
+    const step = w / Math.max(values.length - 1, 1);
+    const points = values
+      .map((v, i) => {
+        const x = i * step;
+        const y = h - 2 - ((v - min) / range) * (h - 4);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(" ");
+    const areaPoints = `0,${h} ${points} ${w},${h}`;
+    const area =
+      fill !== "none"
+        ? `<polyline points="${areaPoints}" fill="${fill}" stroke="none" />`
+        : "";
+    return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none" class="block">
+      ${area}
+      <polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+    </svg>`;
+  }
+
+  // ---------- Router ----------
+  function setView(v) {
+    if (v === "cliente" && !state.selectedClient) return;
+    state.view = v;
+    render();
+  }
+  function selectClient(id) {
+    const c = clientById(id);
+    if (!c || c.status === "nodata") return;
+    state.selectedClient = id;
+    state.view = "cliente";
+    render();
+  }
+
+  // ---------- Render root ----------
+  function render() {
+    document.getElementById("topbar-tabs").innerHTML = renderTabs();
+    document.getElementById("topbar-meta").innerHTML = renderTopbarMeta();
+    document.getElementById("sidebar").innerHTML = renderSidebar();
+    const main = document.getElementById("main");
+    if (state.view === "overview") main.innerHTML = renderOverview();
+    else if (state.view === "cliente") main.innerHTML = renderCliente();
+    else if (state.view === "comparativa") main.innerHTML = renderComparativa();
+    afterRender();
+    bind();
+  }
+
+  // ---------- Topbar ----------
+  function renderTabs() {
+    const tabs = [
+      { id: "overview", label: "Overview", enabled: true },
+      { id: "cliente", label: "Cliente", enabled: !!state.selectedClient },
+      { id: "comparativa", label: "Comparativa", enabled: true },
+    ];
+    return tabs
+      .map(
+        (t) => `
+      <button data-tab="${t.id}" ${t.enabled ? "" : "disabled"}
+        class="px-4 py-2 rounded-full text-[13px] font-medium transition
+          ${state.view === t.id
+            ? "bg-[#613BC0] text-white"
+            : t.enabled
+            ? "text-slate-600 hover:text-[#613BC0] hover:bg-[#F9F7FF]"
+            : "text-slate-300 cursor-not-allowed"}">
+        ${t.label}${t.id === "cliente" && state.selectedClient ? ` · ${clientById(state.selectedClient).name}` : ""}
+      </button>`
+      )
+      .join("");
+  }
+
+  function renderTopbarMeta() {
+    const c = state.selectedClient ? clientById(state.selectedClient) : null;
+    const nativeBadge = c && c.currency !== "USD"
+      ? `<div class="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600">
+           <span>Moneda nativa:</span><span class="text-[#613BC0]">${c.currency}</span>
+         </div>`
+      : "";
+    const pill = (cur) => {
+      const active = state.displayCurrency === cur;
+      return `<button data-currency="${cur}" class="px-2.5 py-1 rounded-full text-[11px] font-semibold transition ${active ? "bg-white text-[#613BC0] shadow-sm" : "text-slate-500 hover:text-slate-700"}">${cur}</button>`;
+    };
+    let tsText = "—";
+    if (DATA.extractedAt) {
+      const d = new Date(DATA.extractedAt);
+      tsText = d.toLocaleDateString("es-CL", { day: "2-digit", month: "short" }) + " " +
+               d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+    }
+    let fxText = "";
+    if (DATA.fxRates) {
+      const clp = Math.round(DATA.fxRates.CLP || 0);
+      const cop = Math.round(DATA.fxRates.COP || 0);
+      fxText = `1 USD = $${clp.toLocaleString("es-CL")} CLP · $${cop.toLocaleString("es-CL")} COP`;
+    }
+    return `
+      ${nativeBadge}
+      <div class="flex items-center gap-1 rounded-full bg-slate-100 p-1">
+        ${pill("USD")}${pill("CLP")}${pill("COP")}
       </div>
+      <div class="hidden lg:flex flex-col items-end text-[11px] text-slate-500 leading-tight">
+        <span>Actualizado <span class="text-slate-700 font-medium">${tsText}</span></span>
+        <span class="tabular-nums">${fxText}</span>
+      </div>
+    `;
+  }
 
-      <!-- Tabla mensual -->
-      <div class="card overflow-hidden">
-        <div class="px-5 py-3 border-b border-gray-100">
-          <h3 id="table-title" class="font-semibold text-gray-800 text-sm">Desglose mensual</h3>
+  // ---------- Sidebar ----------
+  function renderSidebar() {
+    const groups = DATA.groups;
+    const ungrouped = DATA.clients.filter((c) => !c.group);
+
+    const renderClientCard = (c, indent = false) => {
+      const nodata = c.status === "nodata";
+      const last = clientLastMonth(c);
+      const mom = clientMoM(c);
+      const active = state.selectedClient === c.id;
+      const momCls = mom == null ? "text-slate-400" : mom >= 0 ? "text-[#16A34A]" : "text-[#DC2626]";
+      const momArrow = mom == null ? "·" : mom >= 0 ? "↑" : "↓";
+
+      return `
+        <button
+          data-client="${c.id}"
+          ${nodata ? "disabled" : ""}
+          class="group w-full text-left rounded-lg px-2.5 py-2 transition
+            ${indent ? "ml-2" : ""}
+            ${active ? "bg-[#F9F7FF] border-l-[3px] border-[#613BC0] pl-[9px]" : "border-l-[3px] border-transparent pl-[9px] hover:bg-slate-50 hover:border-[#613BC0]/30"}
+            ${nodata ? "opacity-40 cursor-not-allowed hover:bg-transparent hover:border-transparent" : ""}">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[13px] font-medium truncate ${active ? "text-[#613BC0]" : "text-slate-800"}">${c.name}</span>
+            <span class="text-[11px] font-semibold tabular-nums ${momCls}">
+              ${nodata ? "—" : `${momArrow} ${mom == null ? "—" : fmtPct(Math.abs(mom), 0)}`}
+            </span>
+          </div>
+          <div class="mt-0.5 flex items-center justify-between gap-2">
+            <span class="text-[11px] tabular-nums text-slate-500">${nodata ? "Sin datos" : fmtUSD(last ? last.ventas : 0)}</span>
+            <span class="text-[10px] text-slate-400 uppercase tracking-wider">${last ? monthShort(last.month) : ""}</span>
+          </div>
+        </button>
+      `;
+    };
+
+    const renderGroup = (g) => {
+      const allMembers = g.members.map(clientById).filter(Boolean);
+      const members = allMembers.filter((m) => !state.hideNoData || m.status !== "nodata");
+      const gmv = members.reduce((s, m) => s + (clientLastMonth(m)?.ventas || 0), 0);
+      return `
+        <div class="mb-2">
+          <div class="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-[#F9F7FF]">
+            <span class="text-[11px] font-semibold tracking-wider text-[#613BC0] uppercase">${g.name}</span>
+            <span class="text-[11px] font-semibold tabular-nums text-[#613BC0]">${fmtUSD(gmv)}</span>
+          </div>
+          <div class="mt-1 space-y-0.5">
+            ${members.map((m) => renderClientCard(m, true)).join("")}
+          </div>
         </div>
+      `;
+    };
+
+    return `
+      <div class="flex items-center justify-between px-3 pt-4 pb-2">
+        <span class="text-[10px] font-semibold tracking-[0.15em] text-slate-400 uppercase">Clientes</span>
+        <span class="text-[10px] text-slate-400 tabular-nums">${DATA.clients.filter(c=>c.status!=="nodata").length}/${DATA.clients.length}</span>
+      </div>
+      <div class="px-3 pb-3">
+        <label class="flex items-center justify-between gap-2 cursor-pointer select-none">
+          <span class="text-[11px] font-medium text-slate-600">Ocultar sin datos</span>
+          <button data-hide-nodata class="relative inline-flex h-[18px] w-[30px] shrink-0 items-center rounded-full transition ${state.hideNoData ? "bg-[#613BC0]" : "bg-slate-300"}" role="switch" aria-checked="${state.hideNoData}">
+            <span class="inline-block h-[14px] w-[14px] transform rounded-full bg-white shadow transition ${state.hideNoData ? "translate-x-[14px]" : "translate-x-[2px]"}"></span>
+          </button>
+        </label>
+      </div>
+      <div class="px-2 pb-4 space-y-2 overflow-y-auto" style="max-height: calc(100vh - 100px);">
+        ${groups.map(renderGroup).join("")}
+        <div class="mb-1 px-2.5 py-1.5">
+          <span class="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Individuales</span>
+        </div>
+        <div class="space-y-0.5">
+          ${ungrouped.filter((c) => !state.hideNoData || c.status !== "nodata").map((c) => renderClientCard(c)).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  // ---------- Overview ----------
+  function renderOverview() {
+    const g = DATA.globals;
+    const gmvSeries = computeGlobalMonthly();
+    const lastGmv = gmvSeries[gmvSeries.length - 1];
+    const prevGmv = gmvSeries[gmvSeries.length - 2];
+    const gmvMoM = prevGmv ? (lastGmv - prevGmv) / prevGmv : 0;
+
+    return `
+      <div class="p-6 lg:p-8 space-y-6 mx-auto" style="max-width: 1600px;">
+        ${renderOverviewHero(g, gmvSeries, gmvMoM)}
+        ${renderMovimiento()}
+        ${renderRanking()}
+      </div>
+    `;
+  }
+
+  function renderOverviewHero(g, gmvSeries, gmvMoM) {
+    // Use latest CLOSED month for the MoM comparison (consistent with Movimiento del mes)
+    const byMonth = computeGlobalMonthlyByMonth();
+    const monthsOrdered = Object.keys(byMonth).sort();
+    let closedIdx = monthsOrdered.length - 1;
+    if (closedIdx >= 0 && isCurrentCalendarMonth(monthsOrdered[closedIdx]) && closedIdx >= 1) closedIdx -= 1;
+    const closedYM = monthsOrdered[closedIdx];
+    const prevYM = monthsOrdered[closedIdx - 1];
+    const closedGmv = closedYM != null ? byMonth[closedYM] : null;
+    const prevClosedGmv = prevYM != null ? byMonth[prevYM] : null;
+    const closedMoM = (closedGmv != null && prevClosedGmv) ? (closedGmv - prevClosedGmv) / prevClosedGmv : null;
+    if (closedMoM != null) gmvMoM = closedMoM;
+    const lastGmv = closedGmv != null ? closedGmv : gmvSeries[gmvSeries.length - 1];
+    const momMonthLabel = closedYM ? monthShort(closedYM) : "";
+    const heroMomCls = gmvMoM == null ? "text-slate-400 border border-slate-200" : gmvMoM >= 0 ? "text-[#15803D] border border-[#15803D]/20" : "text-[#DC2626] border border-[#DC2626]/20";
+    const heroMomArrow = gmvMoM == null ? "·" : gmvMoM >= 0 ? "↑" : "↓";
+
+    const kpis = [
+      { label: "Pedidos · últimos 12 meses", value: fmtNum(g.pedidos12m), sub: "órdenes procesadas" },
+      { label: "Comercios activos", value: fmtNum(g.comerciosActivos), sub: `de ${fmtNum(g.comerciosRegistrados)} registrados` },
+      { label: "Tasa activación global", value: fmtPct(g.comerciosActivos / g.comerciosRegistrados), sub: "comercios con al menos 1 orden" },
+      { label: "Clientes activos", value: `${g.clientesActivos}/${g.clientesTotal}`, sub: `${g.clientesTotal - g.clientesActivos} sin actividad 12m` },
+    ];
+
+    return `
+      <div class="grid grid-cols-12 gap-5">
+        <!-- Hero GMV card -->
+        <div class="col-span-12 lg:col-span-5 relative overflow-hidden rounded-2xl border border-[#613BC0]/15 bg-white p-7"
+             style="background: radial-gradient(120% 100% at 0% 0%, #F9F7FF 0%, #FFFFFF 55%), linear-gradient(135deg, #F9F7FF 0%, #FFFFFF 60%, #FFF5EC 100%);">
+          <div class="relative z-10">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-semibold tracking-[0.15em] text-[#613BC0] uppercase">GMV · últimos 12 meses</span>
+              <span class="h-1.5 w-1.5 rounded-full bg-[#613BC0] animate-pulse"></span>
+            </div>
+            <div class="mt-3 flex items-baseline gap-3">
+              <span class="text-[56px] font-bold tracking-tight tabular-nums text-slate-900 leading-none">${fmtUSD(g.gmv12m)}</span>
+            </div>
+            <div class="mt-4 flex items-center gap-3 text-[13px]">
+              <span class="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 ${heroMomCls} font-semibold tabular-nums">
+                ${heroMomArrow} ${gmvMoM == null ? "—" : fmtPct(Math.abs(gmvMoM), 1)}
+              </span>
+              <span class="text-slate-500">vs mes anterior · ${fmtMoney(lastGmv)} en ${momMonthLabel}</span>
+            </div>
+            <div class="mt-6">
+              <div class="text-[10px] font-semibold tracking-widest text-slate-400 uppercase mb-2">Evolución mensual</div>
+              <div class="h-16">
+                ${sparkline(gmvSeries, { w: 560, h: 64, stroke: "#613BC0", fill: "url(#heroGrad)" })}
+              </div>
+              <div class="mt-2 flex justify-between text-[10px] text-slate-400 tabular-nums">
+                ${(function () {
+                  if (monthsOrdered.length === 0) return "";
+                  const picks = [0, Math.floor(monthsOrdered.length / 4), Math.floor(monthsOrdered.length / 2), Math.floor(3 * monthsOrdered.length / 4), monthsOrdered.length - 1]
+                    .filter((x, i, a) => a.indexOf(x) === i);
+                  return picks.map((i) => `<span>${monthShort(monthsOrdered[i])}</span>`).join("");
+                })()}
+              </div>
+            </div>
+          </div>
+          <!-- corner accent -->
+          <div class="pointer-events-none absolute -right-24 -bottom-24 h-64 w-64 rounded-full" style="background: radial-gradient(circle, #FFBC7D22 0%, transparent 70%);"></div>
+          <svg width="0" height="0" class="absolute">
+            <defs>
+              <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#613BC0" stop-opacity="0.18"/>
+                <stop offset="100%" stop-color="#613BC0" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+
+        <!-- Secondary KPIs 2x2 -->
+        <div class="col-span-12 lg:col-span-7 grid grid-cols-2 gap-4">
+          ${kpis
+            .map(
+              (k) => `
+            <div class="rounded-xl border border-slate-200 bg-white p-5 hover:border-[#613BC0]/30 hover:shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition">
+              <div class="text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase">${k.label}</div>
+              <div class="mt-3 text-[32px] font-bold tabular-nums text-slate-900 leading-none">${k.value}</div>
+              <div class="mt-2 text-[12px] text-slate-500">${k.sub}</div>
+            </div>`
+            )
+            .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMovimiento() {
+    // Deltas use latest CLOSED month vs previous closed month (excludes in-progress)
+    const rows = DATA.clients
+      .filter((c) => c.status !== "nodata" && c.mensual && c.mensual.length >= 2)
+      .map((c) => {
+        const last = clientLastClosedMonth(c);
+        const prev = clientPrevClosedMonth(c);
+        if (!last || !prev) return null;
+        const delta = last.ventas - prev.ventas;
+        const pct = prev.ventas > 0 ? delta / prev.ventas : null;
+        return { c, delta, pct, last, prev };
+      })
+      .filter(Boolean);
+
+    const growing = rows.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 3);
+    const falling = rows.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 3);
+
+    const fmtSigned = (n) => (n >= 0 ? "+" : "\u2212") + fmtUSD(Math.abs(n));
+
+    const row = (r, tone) => {
+      const pctCls = tone === "up" ? "text-[#15803D] bg-[#DCFCE7]" : "text-[#DC2626] bg-[#FEE2E2]";
+      const deltaCls = tone === "up" ? "text-[#15803D]" : "text-[#DC2626]";
+      return `
+        <button data-row-client="${r.c.id}" class="group w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[#F9F7FF] border border-transparent hover:border-[#613BC0]/20 transition text-left">
+          <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-[#F9F7FF] to-white border border-[#613BC0]/15 flex items-center justify-center text-[11px] font-bold text-[#613BC0] shrink-0">${r.c.name.slice(0, 2).toUpperCase()}</div>
+          <div class="min-w-0 flex-1">
+            <div class="text-[13px] font-semibold text-slate-900 truncate">${r.c.name}</div>
+            <div class="text-[11px] text-slate-500 tabular-nums">${fmtUSD(r.prev.ventas)} \u2192 ${fmtUSD(r.last.ventas)}</div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-[14px] font-bold tabular-nums ${deltaCls}">${fmtSigned(r.delta)}</div>
+            <span class="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${pctCls}">${r.pct == null ? "—" : (r.pct >= 0 ? "↑" : "↓") + " " + fmtPct(Math.abs(r.pct), 1)}</span>
+          </div>
+          <span class="text-slate-300 group-hover:text-[#613BC0] transition">→</span>
+        </button>
+      `;
+    };
+
+    // Dynamic header label + progress note
+    const refRow = rows[0];
+    const headerLabel = refRow ? `${monthShort(refRow.last.month)} vs ${monthShort(refRow.prev.month)}` : "";
+    const anyInProgress = DATA.clients.some((c) => {
+      const last = c.mensual && c.mensual[c.mensual.length - 1];
+      return last && isCurrentCalendarMonth(last.month);
+    });
+    const progressNote = anyInProgress ? " · mes en curso excluido" : "";
+
+    const emptyGrow = `
+      <div class="flex flex-col items-center justify-center text-center px-6 py-10 rounded-xl border border-dashed border-slate-200 bg-slate-50/60">
+        <div class="h-10 w-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 text-[14px] mb-3">—</div>
+        <div class="text-[13px] font-medium text-slate-700">Sin clientes creciendo en el mes cerrado</div>
+        <div class="text-[11px] text-slate-500 mt-1">${headerLabel || "Sin datos comparables"}</div>
+      </div>
+    `;
+    const emptyFall = `
+      <div class="flex flex-col items-center justify-center text-center px-6 py-10 rounded-xl border border-dashed border-slate-200 bg-slate-50/60">
+        <div class="h-10 w-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 text-[14px] mb-3">—</div>
+        <div class="text-[13px] font-medium text-slate-700">Sin caídas en el mes cerrado</div>
+      </div>
+    `;
+
+    return `
+      <section>
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-[14px] font-semibold text-slate-900">Movimiento del mes</h2>
+            <p class="text-[11px] text-slate-500">Ordenado por valor absoluto vs mes anterior${progressNote}</p>
+          </div>
+          <span class="text-[11px] text-slate-400 tabular-nums">${headerLabel}</span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+            <header class="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-[#DCFCE7] text-[#15803D] text-[12px] font-bold">↗</span>
+                <h3 class="text-[13px] font-semibold text-slate-900">Top 3 creciendo</h3>
+              </div>
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-[#15803D]">${growing.length} ${growing.length === 1 ? "cliente" : "clientes"}</span>
+            </header>
+            <div class="p-2 space-y-1">
+              ${growing.length === 0 ? emptyGrow : growing.map((r) => row(r, "up")).join("")}
+            </div>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+            <header class="flex items-center justify-between px-5 py-3 border-b border-slate-100">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-[#FEE2E2] text-[#DC2626] text-[12px] font-bold">↘</span>
+                <h3 class="text-[13px] font-semibold text-slate-900">Top 3 cayendo</h3>
+              </div>
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-[#DC2626]">${falling.length} ${falling.length === 1 ? "cliente" : "clientes"}</span>
+            </header>
+            <div class="p-2 space-y-1">
+              ${falling.length === 0 ? emptyFall : falling.map((r) => row(r, "down")).join("")}
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  function __unusedRenderAlerts() {
+    // build alerts from data
+    const alerts = [];
+    const coexito = clientById("coexito");
+    const munneco = clientById("munneco");
+    const express = clientById("express");
+    const sonrie = clientById("sonrie");
+
+    const coexitoMoM = clientMoM(coexito);
+    if (coexitoMoM != null && coexitoMoM < -0.2)
+      alerts.push({
+        tone: "red",
+        icon: "↓",
+        title: "CoÉxito",
+        subtitle: `Caída ${fmtPct(Math.abs(coexitoMoM), 1)} MoM en abril`,
+        detail: `de ${fmtUSD(clientPrevMonth(coexito).ventas)} → ${fmtUSD(clientLastMonth(coexito).ventas)}`,
+        clientId: "coexito",
+      });
+    const munnecoMoM = clientMoM(munneco);
+    if (munnecoMoM != null && munnecoMoM < -0.2)
+      alerts.push({
+        tone: "red",
+        icon: "↓",
+        title: "El Muñeco",
+        subtitle: `Caída ${fmtPct(Math.abs(munnecoMoM), 0)} MoM`,
+        detail: `${fmtUSD(clientLastMonth(munneco).ventas)} en abril`,
+        clientId: "munneco",
+      });
+    alerts.push({
+      tone: "amber",
+      icon: "!",
+      title: "Express",
+      subtitle: "Sin actividad desde feb",
+      detail: "~68 días sin órdenes",
+      clientId: "express",
+    });
+    alerts.push({
+      tone: "green",
+      icon: "★",
+      title: "Sonrie",
+      subtitle: "Recién activándose",
+      detail: "Primera orden este mes",
+      clientId: "sonrie",
+    });
+
+    const toneMap = {
+      red: {
+        border: "border-[#DC2626]/20",
+        bg: "bg-white",
+        strip: "bg-[#DC2626]",
+        icon: "bg-[#FEE2E2] text-[#DC2626]",
+        label: "text-[#DC2626]",
+        chip: "Caída fuerte",
+      },
+      amber: {
+        border: "border-[#F59E0B]/25",
+        bg: "bg-white",
+        strip: "bg-[#F59E0B]",
+        icon: "bg-[#FEF3C7] text-[#B45309]",
+        label: "text-[#B45309]",
+        chip: "Sin actividad",
+      },
+      green: {
+        border: "border-[#61CE70]/25",
+        bg: "bg-white",
+        strip: "bg-[#61CE70]",
+        icon: "bg-[#DCFCE7] text-[#15803D]",
+        label: "text-[#15803D]",
+        chip: "Recién activo",
+      },
+    };
+
+    return `
+      <section>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-[13px] font-semibold text-slate-800 flex items-center gap-2">
+            <span class="inline-flex h-5 w-5 items-center justify-center rounded-md bg-[#FEF3C7] text-[#B45309] text-[11px]">!</span>
+            Atención esta semana
+          </h2>
+          <span class="text-[11px] text-slate-400 tabular-nums">${alerts.length} señales</span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          ${alerts
+            .map((a) => {
+              const t = toneMap[a.tone];
+              return `
+                <button data-alert-client="${a.clientId}"
+                  class="relative overflow-hidden rounded-xl border ${t.border} ${t.bg} p-4 text-left hover:shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition">
+                  <div class="absolute left-0 top-0 h-full w-1 ${t.strip}"></div>
+                  <div class="pl-2 flex items-start gap-3">
+                    <div class="h-8 w-8 rounded-lg ${t.icon} flex items-center justify-center font-bold text-[13px] shrink-0">${a.icon}</div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-2">
+                        <span class="text-[13px] font-semibold text-slate-900 truncate">${a.title}</span>
+                        <span class="text-[10px] font-medium ${t.label} uppercase tracking-wider">${t.chip}</span>
+                      </div>
+                      <div class="mt-0.5 text-[12px] font-medium text-slate-700">${a.subtitle}</div>
+                      <div class="mt-0.5 text-[11px] text-slate-500">${a.detail}</div>
+                      <div class="mt-2 text-[11px] font-medium text-[#613BC0]">Ver detalle →</div>
+                    </div>
+                  </div>
+                </button>
+              `;
+            })
+            .join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderRanking() {
+    const rows = DATA.clients
+      .filter((c) => c.status !== "nodata")
+      .map((c) => {
+        const last = clientLastMonth(c);
+        const mom = clientMoM(c);
+        const gmv = clientGmv12m(c);
+        return { c, last, mom, gmv, spark: c.mensual.slice(-6).map((m) => m.ventas), status: clientStatus(c) };
+      });
+    rows.sort((a, b) => {
+      if (state.rankingSort === "mom") return (b.mom ?? -999) - (a.mom ?? -999);
+      return b.gmv - a.gmv;
+    });
+
+    const statusBadge = (s) => {
+      if (s === "growing") return `<span class="inline-flex items-center gap-1 rounded-full bg-[#DCFCE7] px-2 py-0.5 text-[10px] font-semibold text-[#15803D] uppercase tracking-wider">● Creciendo</span>`;
+      if (s === "falling") return `<span class="inline-flex items-center gap-1 rounded-full bg-[#FEE2E2] px-2 py-0.5 text-[10px] font-semibold text-[#DC2626] uppercase tracking-wider">● Cayendo</span>`;
+      return `<span class="inline-flex items-center gap-1 rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[10px] font-semibold text-[#B45309] uppercase tracking-wider">● Estable</span>`;
+    };
+
+    return `
+      <section class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <header class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 class="text-[14px] font-semibold text-slate-900">Ranking de clientes</h2>
+            <p class="text-[12px] text-slate-500">Top por ${state.rankingSort === "gmv" ? "GMV 12m" : "MoM"} · click para abrir</p>
+          </div>
+          <div class="flex items-center gap-1 rounded-full bg-slate-100 p-1">
+            <button data-sort="gmv" class="px-3 py-1 rounded-full text-[11px] font-medium ${state.rankingSort === "gmv" ? "bg-white text-[#613BC0] shadow-sm" : "text-slate-500"}">Por GMV</button>
+            <button data-sort="mom" class="px-3 py-1 rounded-full text-[11px] font-medium ${state.rankingSort === "mom" ? "bg-white text-[#613BC0] shadow-sm" : "text-slate-500"}">Por MoM</button>
+          </div>
+        </header>
         <div class="overflow-x-auto">
-          <table class="w-full text-sm" style="min-width:900px">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-4 py-3 text-left whitespace-nowrap w-20">Mes</th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Total de órdenes procesadas en el mes">Pedidos<span class="th-unit">unidades</span></th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Vendedores distintos con al menos 1 pedido en el mes">Vendedores<span class="th-unit">activos</span></th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Total de cuentas de vendedor creadas para este cliente — base facturable de YOM">Ctas. Vend.<span class="th-unit">registradas</span></th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Comercios distintos que realizaron al menos 1 pedido en el mes">Comercios<span class="th-unit">activos</span></th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Comercios activos en el mes vs. total registrados en la plataforma">% Activación<span class="th-unit">activos / reg.</span></th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Ventas totales del mes sin IVA (pricing.discountedTotalPrice)" id="th-ventas">Ventas<span class="th-unit" id="th-ventas-unit">CLP</span></th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Ventas del mes divididas entre vendedores activos" id="th-ventavend">Venta / vend.<span class="th-unit" id="th-ventavend-unit">CLP / vendedor</span></th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Ticket promedio: ventas divididas entre número de pedidos" id="th-ticket">Ticket prom.<span class="th-unit" id="th-ticket-unit">CLP / pedido</span></th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Pedidos del mes divididos entre vendedores activos — productividad por vendedor">Ped. / vend.<span class="th-unit">ped. × vendedor</span></th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Pedidos del mes divididos entre comercios activos — frecuencia de recompra">Ped. / comercio<span class="th-unit">ped. × comercio</span></th>
-                <th class="px-4 py-3 text-right whitespace-nowrap" title="Variación porcentual de ventas respecto al mes anterior">Var. vs ant.<span class="th-unit">% ventas</span></th>
+          <table class="w-full text-[13px]">
+            <thead>
+              <tr class="text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                <th class="text-left font-semibold px-6 py-2.5">Cliente</th>
+                <th class="text-left font-semibold px-4 py-2.5">Sparkline 6m</th>
+                <th class="text-right font-semibold px-4 py-2.5">Ventas mes actual</th>
+                <th class="text-right font-semibold px-4 py-2.5">MoM</th>
+                <th class="text-right font-semibold px-4 py-2.5">GMV 12m</th>
+                <th class="text-left font-semibold px-4 py-2.5">Estado</th>
+                <th class="w-8"></th>
               </tr>
             </thead>
-            <tbody id="monthly-tbody"></tbody>
-            <tfoot id="monthly-tfoot" class="bg-gray-50 border-t-2 border-gray-200 font-semibold text-gray-800"></tfoot>
+            <tbody>
+              ${rows.slice(0, 10).map((r) => {
+                const momCls = r.mom == null ? "text-slate-400" : r.mom >= 0 ? "text-[#15803D]" : "text-[#DC2626]";
+                const arr = r.mom == null ? "" : r.mom >= 0 ? "↑" : "↓";
+                return `
+                  <tr data-row-client="${r.c.id}" class="border-b border-slate-50 hover:bg-[#F9F7FF]/60 cursor-pointer transition">
+                    <td class="px-6 py-3.5">
+                      <div class="flex items-center gap-3">
+                        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-[#F9F7FF] to-white border border-[#613BC0]/15 flex items-center justify-center text-[11px] font-bold text-[#613BC0]">
+                          ${r.c.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div class="font-medium text-slate-900">${r.c.name}</div>
+                          <div class="text-[10px] text-slate-400 uppercase tracking-wider">${r.c.country} · ${r.c.currency}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-4 py-3.5 w-[120px]">${sparkline(r.spark, { w: 100, h: 22, stroke: r.mom >= 0 ? "#15803D" : "#DC2626" })}</td>
+                    <td class="px-4 py-3.5 text-right tabular-nums font-semibold text-slate-900">${fmtUSD(r.last ? r.last.ventas : 0)}</td>
+                    <td class="px-4 py-3.5 text-right tabular-nums font-semibold ${momCls}">${arr} ${r.mom == null ? "—" : fmtPct(Math.abs(r.mom), 1)}</td>
+                    <td class="px-4 py-3.5 text-right tabular-nums text-slate-600">${fmtUSD(r.gmv)}</td>
+                    <td class="px-4 py-3.5">${statusBadge(r.status)}</td>
+                    <td class="px-4 py-3.5 text-slate-300">→</td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
           </table>
         </div>
-      </div>
-
-    </div>
-  </main>
-</div>
-
-<script>
-// ── Helpers de formato ────────────────────────────────────
-const clp  = n => n == null ? '—' : new Intl.NumberFormat('es-CL', { style:'currency', currency:'CLP', maximumFractionDigits:0 }).format(n);
-const clpM = n => {
-  if (n == null) return '—';
-  if (Math.abs(n) >= 1e12) return '$' + (n/1e12).toFixed(2) + 'T';
-  if (Math.abs(n) >= 1e9)  return '$' + (n/1e9).toFixed(1)  + 'B';
-  if (Math.abs(n) >= 1e6)  return '$' + (n/1e6).toFixed(1)  + 'M';
-  if (Math.abs(n) >= 1e3)  return '$' + (n/1e3).toFixed(0)  + 'K';
-  return clp(n);
-};
-const pct  = n => n == null ? '—' : n.toFixed(1) + '%';
-const num  = n => n == null ? '—' : new Intl.NumberFormat('es-CL').format(n);
-const MONTHS = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-const mLabel = (y,m) => `${MONTHS[m]} ${String(y).slice(2)}`;
-const dateStr = iso => iso ? new Date(iso).toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'numeric'}) : '—';
-
-function mom(arr, i, field) {
-  if (i === 0 || !arr[i-1][field]) return null;
-  return (arr[i][field] - arr[i-1][field]) / arr[i-1][field] * 100;
-}
-function momBadge(val) {
-  if (val == null) return '<span class="mom-flat">—</span>';
-  const sign = val >= 0.5 ? '↑' : val <= -0.5 ? '↓' : '→';
-  const cls  = val >= 0.5 ? 'mom-positive' : val <= -0.5 ? 'mom-negative' : 'mom-flat';
-  return `<span class="${cls}">${sign} ${Math.abs(val).toFixed(1)}%</span>`;
-}
-
-// ── Estado ────────────────────────────────────────────────
-let activeClient = null, activeChart = null, activeMetric = 'ventaSinIVA';
-let activeFilter = { year: null, month: null };
-let sidebarOpen = true;
-let displayCurrency = 'USD';
-
-// ── Sidebar toggle ────────────────────────────────────────
-function toggleSidebar() {
-  sidebarOpen = !sidebarOpen;
-  const aside = document.getElementById('sidebar');
-  const badge = document.getElementById('client-badge');
-  if (sidebarOpen) {
-    aside.classList.remove('collapsed');
-    badge.style.display = 'none';
-  } else {
-    aside.classList.add('collapsed');
-    badge.style.display = 'flex';
-  }
-}
-
-// ── Formatter de moneda — n siempre en USD, convierte según displayCurrency
-function fmtCM(n, cur) {
-  const targetCur = cur || displayCurrency || 'USD';
-  if (n == null) return '—';
-  let val = n;
-  const fx = YOM_DATA.fxRates;
-  if (targetCur === 'CLP' && fx) val = n / fx.CLP_TO_USD;
-  else if (targetCur === 'COP' && fx) val = n / fx.COP_TO_USD;
-  const sym = targetCur === 'USD' ? 'US$' : '$';
-  const abs = Math.abs(val);
-  if (abs >= 1e12) return sym + (val/1e12).toFixed(2) + 'T';
-  if (abs >= 1e9)  return sym + (val/1e9).toFixed(1)  + 'B';
-  if (abs >= 1e6)  return sym + (val/1e6).toFixed(1)  + 'M';
-  if (abs >= 1e3)  return sym + (val/1e3).toFixed(0)  + 'K';
-  return new Intl.NumberFormat(targetCur === 'USD' ? 'en-US' : 'es-CL',
-    { style: 'currency', currency: targetCur, maximumFractionDigits: 0 }).format(val);
-}
-
-// ── Init ─────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  if (typeof YOM_DATA === 'undefined') {
-    document.body.innerHTML = `<div class="flex items-center justify-center h-screen flex-col gap-3 text-gray-400">
-      <p class="text-lg font-semibold">Sin datos cargados</p>
-      <code class="bg-gray-100 text-gray-600 text-sm px-3 py-2 rounded">mongosh "&lt;URI&gt;" --quiet --file extract.js > data.js</code>
-    </div>`;
-    return;
+        <footer class="px-6 py-3 border-t border-slate-100 text-[12px] text-slate-500 flex items-center justify-between">
+          <span>Mostrando ${Math.min(10, rows.length)} de ${rows.length} clientes activos</span>
+          <button class="text-[#613BC0] font-medium hover:underline">Ver todos →</button>
+        </footer>
+      </section>
+    `;
   }
 
-  // Timestamp + tasa del día
-  const d = new Date(YOM_DATA.extractedAt);
-  let tsText = 'Actualizado ' + d.toLocaleDateString('es-CL',{day:'2-digit',month:'short'}) + ' ' + d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
-  if (YOM_DATA.fxRates && YOM_DATA.fxRates.CLP_TO_USD) {
-    const clpRate = Math.round(1 / YOM_DATA.fxRates.CLP_TO_USD);
-    tsText += ' · 1 USD = $' + clpRate.toLocaleString('es-CL') + ' CLP';
-  }
-  document.getElementById('hdr-ts').textContent = tsText;
-
-  renderGlobal();
-  renderGrid();
-  setupTabs();
-
-  // Abrir primer cliente con datos
-  const first = YOM_DATA.clients.find(c => !c.sinDatos && c.mensual.length);
-  if (first) openClient(first);
-});
-
-// ── KPIs globales (últimos 12 meses, USD) ────────────────
-function renderGlobal() {
-  const cl = YOM_DATA.clients.filter(c => !c.sinDatos);
-
-  let gmv12 = 0, ords12 = 0;
-  cl.forEach(c => {
-    c.mensual.forEach(m => { gmv12 += m.ventaSinIVA; ords12 += m.ordenes; });
-  });
-
-  const totalComs = cl.reduce((a,c) => a + c.comercios, 0);
-  const totalReg  = cl.reduce((a,c) => a + c.comerciosRegistrados, 0);
-  const actRate   = totalReg > 0 ? (totalComs / totalReg * 100) : 0;
-
-  document.getElementById('hdr-total').textContent = fmtCM(gmv12, 'USD');
-
-  document.getElementById('global-kpis').innerHTML = [
-    { label: 'Ventas (12m)',            value: fmtCM(gmv12, 'USD'),  sub: cl.length + ' clientes activos',       color: 'text-blue-700' },
-    { label: 'Pedidos (12m)',           value: num(ords12),           sub: 'órdenes procesadas',                  color: 'text-gray-900' },
-    { label: 'Comercios activos',       value: num(totalComs),        sub: 'con al menos 1 orden',                color: 'text-gray-900' },
-    { label: 'Tasa activación global',  value: pct(actRate),          sub: totalComs + ' de ' + num(totalReg) + ' registrados', color: actRate >= 50 ? 'text-green-700' : 'text-orange-600' },
-  ].map(k => `
-    <div class="card p-4 hover:shadow-md transition-shadow">
-      <div class="text-2xl font-bold ${k.color}">${k.value}</div>
-      <div class="text-sm font-medium text-gray-700 mt-1">${k.label}</div>
-      <div class="text-xs text-gray-400 mt-0.5">${k.sub}</div>
-    </div>
-  `).join('');
-}
-
-// ── Grupos de clientes ────────────────────────────────────
-const GROUPS = [
-  { id: 'g-soprole', name: 'Grupo Soprole', domains: ['soprole.youorder.me', 'sonrie.youorder.me'] },
-  { id: 'g-prisur',  name: 'Grupo Surtiventas',  domains: ['surtiventas.youorder.me', 'prisa.youorder.me', 'prisur.youorder.me'] },
-];
-const groupExpanded = {};
-
-// Fallback para data.js generados antes de que se agregara nativeCurrency
-const DOMAIN_NATIVE_CURRENCY = { 'coexito.youorder.me': 'COP' };
-function getNativeCurrency(client) {
-  return client.nativeCurrency || DOMAIN_NATIVE_CURRENCY[client.domain] || 'CLP';
-}
-
-function toggleGroup(gid) {
-  groupExpanded[gid] = !groupExpanded[gid];
-  renderGrid();
-}
-
-function clientCard(c) {
-  if (c.sinDatos) return `
-    <div class="client-card no-data rounded-lg px-3 py-2">
-      <div class="text-xs font-semibold text-gray-400">${c.name}</div>
-      <div class="text-xs text-gray-300">Sin datos</div>
-    </div>`;
-  const last2 = c.mensual.slice(-2);
-  const lastM = last2[last2.length - 1];
-  const prevM = last2.length > 1 ? last2[0] : null;
-  const momVal = lastM && prevM && prevM.ventaSinIVA
-    ? (lastM.ventaSinIVA - prevM.ventaSinIVA) / prevM.ventaSinIVA * 100 : null;
-  const momCls  = momVal == null ? 'flat' : momVal >= 0.5 ? 'up' : momVal <= -0.5 ? 'down' : 'flat';
-  const momSign = momVal == null ? '' : momVal >= 0.5 ? '↑' : momVal <= -0.5 ? '↓' : '→';
-  const inactivo = !lastM;
-  const isActive = activeClient && activeClient.domain === c.domain;
-  return `
-    <div class="client-card rounded-lg px-3 py-2.5 ${inactivo ? 'opacity-50' : ''} ${isActive ? 'active' : ''}" data-domain="${c.domain}"
-         style="border:1px solid #e2e8f0; background:white; cursor:pointer; transition:all 0.12s;">
-      <div class="flex items-center justify-between gap-1">
-        <span class="text-xs font-semibold text-gray-800 truncate">${c.name}</span>
-        <span class="${momCls} text-xs font-bold whitespace-nowrap">${momSign}${momVal != null ? Math.abs(momVal).toFixed(0)+'%' : ''}</span>
-      </div>
-      <div class="text-sm font-bold ${inactivo ? 'text-gray-300' : 'text-blue-700'} leading-tight mt-0.5">
-        ${lastM ? fmtCM(lastM.ventaSinIVA) : '—'}
-      </div>
-      <div class="text-xs text-gray-400">${lastM ? mLabel(lastM.year, lastM.month) : 'sin actividad'}</div>
-    </div>`;
-}
-
-// ── Sidebar clientes ──────────────────────────────────────
-function renderGrid() {
-  const groupedDomains = new Set(GROUPS.flatMap(g => g.domains));
-  let html = '';
-
-  // Grupos colapsables primero
-  GROUPS.forEach(g => {
-    const expanded = !!groupExpanded[g.id];
-    const groupClients = g.domains.map(d => YOM_DATA.clients.find(c => c.domain === d)).filter(Boolean);
-    const groupGMV = groupClients.reduce((sum, c) => {
-      if (c.sinDatos || !c.mensual.length) return sum;
-      const lastM = c.mensual[c.mensual.length - 1];
-      return sum + (lastM ? lastM.ventaSinIVA : 0);
-    }, 0);
-    html += `
-      <div class="group-header flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer bg-slate-100 hover:bg-slate-200 mt-1"
-           onclick="toggleGroup('${g.id}')" style="transition:all 0.12s;">
-        <span class="text-xs font-bold text-gray-700">${g.name}</span>
-        <div class="flex items-center gap-1.5">
-          <span class="text-xs font-bold text-blue-700">${fmtCM(groupGMV)}</span>
-          <span class="text-gray-400 text-xs">${expanded ? '▲' : '▼'}</span>
-        </div>
-      </div>
-      <div class="${expanded ? 'flex flex-col gap-1.5 pl-1 mt-1' : 'hidden'}">
-        ${groupClients.map(c => clientCard(c)).join('')}
-      </div>`;
-  });
-
-  // Clientes sin grupo al final
-  YOM_DATA.clients.forEach(c => {
-    if (!groupedDomains.has(c.domain)) html += clientCard(c);
-  });
-
-  document.getElementById('client-grid').innerHTML = html;
-
-  document.querySelectorAll('.client-card:not(.no-data)').forEach(el => {
-    el.addEventListener('click', () => {
-      const c = YOM_DATA.clients.find(x => x.domain === el.dataset.domain);
-      openClient(c);
+  function computeGlobalMonthlyByMonth() {
+    const buckets = {};
+    DATA.clients.forEach((c) => {
+      (c.mensual || []).forEach((m) => { buckets[m.month] = (buckets[m.month] || 0) + m.ventas; });
     });
-  });
-}
-
-// ── Helpers de período ────────────────────────────────────
-function getFilteredMonths(client, year, month) {
-  if (!year) return client.mensual;
-  if (!month) return client.mensual.filter(m => m.year === year);
-  return client.mensual.filter(m => m.year === year && m.month === month);
-}
-
-function aggregateMonths(months, comerciosRegistrados, cuentasVendedor) {
-  if (!months.length) return null;
-  const n = months.length;
-  const totOrd  = months.reduce((s,m) => s + m.ordenes, 0);
-  const totVen  = months.reduce((s,m) => s + m.ventaSinIVA, 0);
-  const avgCom  = months.reduce((s,m) => s + m.comerciosActivos, 0) / n;
-  const avgVend = months.reduce((s,m) => s + m.vendedoresActivos, 0) / n;
-  return {
-    ordenes:       totOrd,
-    ventaSinIVA:   totVen,
-    avgComercios:  avgCom,
-    avgVendedores: avgVend,
-    actRate:       comerciosRegistrados > 0 ? avgCom / comerciosRegistrados * 100 : null,
-    actRateVend:   cuentasVendedor > 0 ? Math.min(avgVend / cuentasVendedor * 100, 100) : null,
-    ticket:        totOrd > 0 ? totVen / totOrd : 0,
-    ventaXVend:    avgVend > 0 ? totVen / avgVend : 0,
-    pedXVend:      avgVend > 0 ? totOrd / avgVend : 0,
-    comXVend:      avgVend > 0 ? avgCom / avgVend : 0,
-    pedXCom:       avgCom  > 0 ? totOrd / avgCom  : 0,
-  };
-}
-
-// ── Selector de período ───────────────────────────────────
-function renderPeriodSelector(client) {
-  const years = [...new Set(client.mensual.map(m => m.year))].sort();
-  const pill  = (label, active, onClick) =>
-    `<button class="period-pill ${active
-      ? 'bg-blue-600 text-white font-semibold'
-      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-    } rounded-full px-3 py-1 text-xs cursor-pointer border-0"
-      onclick="${onClick}">${label}</button>`;
-
-  const noYear = activeFilter.year === null;
-  document.getElementById('year-pills').innerHTML =
-    pill('Todo', noYear, 'setYear(null)') +
-    years.map(y => pill(y, activeFilter.year === y, `setYear(${y})`)).join('');
-
-  const monthPills = document.getElementById('month-pills');
-  if (!activeFilter.year) {
-    monthPills.classList.add('hidden');
-    return;
+    return buckets;
   }
-  const availMonths = client.mensual.filter(m => m.year === activeFilter.year).map(m => m.month);
-  monthPills.classList.remove('hidden');
-  monthPills.innerHTML =
-    pill('Año completo', activeFilter.month === null, 'setMonth(null)') +
-    availMonths.map(mo => pill(MONTHS[mo], activeFilter.month === mo, `setMonth(${mo})`)).join('');
-}
-
-function setYear(year) {
-  activeFilter = { year, month: null };
-  renderPeriodSelector(activeClient);
-  applyFilter();
-}
-function setMonth(month) {
-  activeFilter.month = month;
-  renderPeriodSelector(activeClient);
-  applyFilter();
-}
-
-// ── Aplicar filtro ────────────────────────────────────────
-function applyFilter() {
-  const months = getFilteredMonths(activeClient, activeFilter.year, activeFilter.month);
-  const agg    = aggregateMonths(months, activeClient.comerciosRegistrados, activeClient.cuentasVendedor);
-  renderKPIs(agg, months);
-  renderChart(months);
-  renderTable(months);
-  // Etiqueta período
-  const { year, month } = activeFilter;
-  const label = !year ? 'últimos 12m' : !month ? String(year) : `${MONTHS[month]} ${year}`;
-  document.getElementById('d-period').textContent =
-    dateStr(activeClient.primeraOrden) + ' → ' + dateStr(activeClient.ultimaOrden) + ' · mostrando ' + label;
-  document.getElementById('table-title').textContent = 'Desglose mensual — ' + label;
-  // Sync sticky bar
-}
-
-// ── KPIs del período ──────────────────────────────────────
-function renderKPIs(agg, months) {
-  if (!agg) {
-    document.getElementById('d-kpis').innerHTML = '<div class="col-span-4 text-xs text-gray-400 py-2">Sin datos para el período seleccionado</div>';
-    return;
-  }
-  // MoM: último mes del período vs el anterior en el array completo
-  const lastM = months[months.length - 1];
-  const prevM = lastM ? activeClient.mensual.find(
-    m => (m.year === lastM.year && m.month === lastM.month - 1) ||
-         (m.month === 12 && lastM.month === 1 && m.year === lastM.year - 1)
-  ) : null;
-  const momGMV = lastM && prevM && prevM.ventaSinIVA
-    ? (lastM.ventaSinIVA - prevM.ventaSinIVA) / prevM.ventaSinIVA * 100 : null;
-
-  const ventaUltMes = lastM ? lastM.ventaSinIVA : null;
-
-  document.getElementById('d-kpis').innerHTML = [
-    { label: 'Ventas',                  value: fmtCM(agg.ventaSinIVA),                          sub: 'del período' },
-    { label: 'Pedidos',                 value: num(agg.ordenes),                                sub: 'órdenes procesadas' },
-    { label: 'Vendedores prom./mes',    value: agg.avgVendedores.toFixed(1),                    sub: 'activos promedio mensual' },
-    { label: 'Comercios prom./mes',     value: agg.avgComercios.toFixed(1),                     sub: 'de ' + num(activeClient.comerciosRegistrados) + ' registrados' },
-    { label: 'Ventas último mes',       value: fmtCM(ventaUltMes),                              sub: lastM ? mLabel(lastM.year, lastM.month) : '—' },
-    { label: 'Var. mes anterior',       value: momBadge(momGMV),                                sub: lastM ? mLabel(lastM.year, lastM.month) : '—' },
-    { label: 'Ticket promedio',         value: fmtCM(agg.ticket),                               sub: 'ventas / pedidos' },
-    { label: '% Act. vendedores',       value: agg.actRateVend != null ? pct(agg.actRateVend) : '—', sub: agg.avgVendedores.toFixed(0) + ' activos de ' + num(activeClient.cuentasVendedor) + ' cuentas' },
-    { label: 'Venta por vendedor',      value: fmtCM(agg.ventaXVend),                           sub: 'ventas / vendedores prom.' },
-    { label: 'Pedidos por vendedor',    value: agg.pedXVend.toFixed(1) + 'x',                   sub: 'productividad vendedor' },
-    { label: 'Comercios por vendedor',  value: agg.comXVend.toFixed(1),                         sub: 'cobertura promedio' },
-    { label: 'Pedidos por comercio',    value: agg.pedXCom.toFixed(1) + 'x',                    sub: 'frecuencia de recompra' },
-  ].map(k => `
-    <div class="bg-gray-50 rounded-lg px-3 py-2.5 text-right">
-      <div class="text-base font-bold text-gray-900">${k.value}</div>
-      <div class="text-xs text-gray-600 leading-tight">${k.label}</div>
-      <div class="text-xs text-gray-400">${k.sub}</div>
-    </div>
-  `).join('');
-}
-
-// ── Pills de moneda ───────────────────────────────────────
-function renderCurrencyPills(nativeCur) {
-  const currencies = ['USD'];
-  if (nativeCur && nativeCur !== 'USD') currencies.push(nativeCur);
-  if (nativeCur && nativeCur !== 'CLP' && nativeCur !== 'USD') currencies.push('CLP');
-  const container = document.getElementById('currency-pills');
-  container.innerHTML = currencies.map(cur =>
-    `<button class="currency-pill px-2 py-0.5 rounded text-xs font-semibold border
-      ${displayCurrency === cur
-        ? 'bg-blue-600 text-white border-blue-600'
-        : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'}"
-      data-cur="${cur}">${cur}</button>`
-  ).join('');
-  container.classList.remove('hidden');
-  container.style.display = 'flex';
-  container.querySelectorAll('.currency-pill').forEach(btn =>
-    btn.addEventListener('click', () => {
-      displayCurrency = btn.dataset.cur;
-      renderCurrencyPills(nativeCur);
-      openClient(activeClient, false);
-    })
-  );
-}
-
-// ── Abrir cliente ─────────────────────────────────────────
-function openClient(client, resetFilter = true) {
-  activeClient = client;
-  const mainEl = document.querySelector('main');
-  const savedScroll = resetFilter ? 0 : mainEl.scrollTop;
-
-  // Expandir grupo si el cliente está en uno colapsado
-  const clientGroup = GROUPS.find(g => g.domains.includes(client.domain));
-  if (clientGroup && !groupExpanded[clientGroup.id]) {
-    groupExpanded[clientGroup.id] = true;
-  }
-  renderGrid();
-
-  document.getElementById('detail').style.display = 'flex';
-  document.getElementById('d-name').textContent = client.name;
-  document.getElementById('d-badge').classList.add('hidden');
-  document.getElementById('badge-name').textContent = client.name;
-
-  renderCurrencyPills(getNativeCurrency(client));
-
-  const sym = displayCurrency === 'USD' ? 'US$' : '$';
-  document.getElementById('hdr-subtitle').textContent =
-    'Legacy Production · Montos en ' + displayCurrency + ' (' + sym + ')';
-  const elU = document.getElementById('th-ventas-unit');
-  if (elU) {
-    elU.textContent = displayCurrency;
-    document.getElementById('th-ventavend-unit').textContent = displayCurrency + ' / vend.';
-    document.getElementById('th-ticket-unit').textContent = displayCurrency + ' / pedido';
+  function computeGlobalMonthly() {
+    const buckets = computeGlobalMonthlyByMonth();
+    const sorted = Object.keys(buckets).sort();
+    return sorted.map((k) => buckets[k]);
   }
 
-  if (resetFilter) {
-    const years = [...new Set(client.mensual.map(m => m.year))].sort();
-    activeFilter = { year: years[years.length - 1] ?? null, month: null };
+  // ---------- Cliente view ----------
+  function renderCliente() {
+    if (!state.selectedClient) return `<div class="p-8 text-slate-500">Selecciona un cliente.</div>`;
+    const c = clientById(state.selectedClient);
+    const last = clientLastMonth(c);
+    const prev = clientPrevMonth(c);
+    const mom = clientMoM(c);
+    const activeMonths = c.mensual.filter((m) => m.ventas > 0);
+    const periodoVentas = activeMonths.reduce((s, m) => s + m.ventas, 0);
+    const periodoPedidos = activeMonths.reduce((s, m) => s + m.pedidos, 0);
+    const avgVend = clientAvgActive(c, "vendedores");
+    const avgCom = clientAvgActive(c, "comercios");
+    const pctVend = (avgVend / (last?.registradosVend || 1)) * 100;
+    const pctCom = (avgCom / (last?.registradosCom || 1)) * 100;
+
+    const momCls = mom == null ? "text-slate-500" : mom >= 0 ? "text-[#15803D]" : "text-[#DC2626]";
+    const momBg = mom == null ? "bg-slate-100 text-slate-500" : mom >= 0 ? "bg-[#DCFCE7] text-[#15803D]" : "bg-[#FEE2E2] text-[#DC2626]";
+
+    const kpis = [
+      {
+        label: "Ventas del período",
+        value: fmtUSD(periodoVentas),
+        foot: `<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${momBg}">${mom == null ? "—" : (mom >= 0 ? "↑" : "↓") + " " + fmtPct(Math.abs(mom), 1)} MoM</span>`,
+      },
+      {
+        label: "Pedidos",
+        value: fmtNum(periodoPedidos),
+        foot: `<span class="text-[11px] text-slate-500">órdenes procesadas · ${activeMonths.length} meses activos</span>`,
+      },
+      {
+        label: "Vendedores activos prom./mes",
+        value: fmtNum(Math.round(avgVend)),
+        foot: `<span class="text-[11px] text-slate-500">${pctVend.toFixed(1)}% activación · ${last?.registradosVend || 0} registrados</span>`,
+      },
+      {
+        label: "Comercios activos prom./mes",
+        value: fmtNum(Math.round(avgCom)),
+        foot: `<span class="text-[11px] text-slate-500">${pctCom.toFixed(1)}% activación · ${fmtNum(last?.registradosCom || 0)} registrados</span>`,
+      },
+    ];
+
+    return `
+      <div class="p-6 lg:p-8 space-y-6 mx-auto" style="max-width: 1600px;">
+        ${renderClienteHeader(c)}
+        <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          ${kpis.map((k) => `
+            <div class="rounded-xl border border-slate-200 bg-white p-5">
+              <div class="text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase">${k.label}</div>
+              <div class="mt-2 text-[30px] font-bold tabular-nums text-slate-900 leading-none">${k.value}</div>
+              <div class="mt-3">${k.foot}</div>
+            </div>
+          `).join("")}
+        </section>
+
+        ${renderClienteChart(c)}
+        ${renderClienteOps(c)}
+        ${renderClienteTable(c)}
+      </div>
+    `;
   }
 
-  renderPeriodSelector(client);
-  applyFilter();
-
-  if (resetFilter) {
-    mainEl.scrollTo({ top: 0, behavior: 'smooth' });
-  } else {
-    requestAnimationFrame(() => mainEl.scrollTo({ top: savedScroll, behavior: 'instant' }));
+  function renderClienteHeader(c) {
+    const first = c.firstOrder ? new Date(c.firstOrder) : null;
+    const lastD = c.lastOrder ? new Date(c.lastOrder) : null;
+    const fmtD = (d) => d ? d.toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+    const periods = [
+      { id: "todo", label: "Todo" },
+      { id: "2025", label: "2025" },
+      { id: "2026", label: "2026" },
+      { id: "ene", label: "Ene" },
+      { id: "feb", label: "Feb" },
+      { id: "mar", label: "Mar" },
+      { id: "abr", label: "Abr" },
+    ];
+    return `
+      <header class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-3">
+            <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-[#F9F7FF] to-white border border-[#613BC0]/20 flex items-center justify-center text-[14px] font-bold text-[#613BC0]">
+              ${c.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <h1 class="text-[28px] font-bold text-slate-900 leading-tight tracking-tight">${c.name}</h1>
+              <div class="mt-0.5 flex items-center gap-2 text-[12px] text-slate-500">
+                <span class="inline-flex items-center gap-1 rounded-full bg-[#F9F7FF] border border-[#613BC0]/15 px-2 py-0.5 text-[10px] font-semibold text-[#613BC0] uppercase tracking-wider">${c.currency}</span>
+                <span>${c.country}</span>
+                <span class="text-slate-300">·</span>
+                <span>${fmtD(first)} → ${fmtD(lastD)}</span>
+                <span class="text-slate-300">·</span>
+                <span>mostrando ${state.cliPeriod === "todo" ? "12m" : state.cliPeriod}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1 rounded-full bg-slate-100 p-1">
+          ${periods.map((p) => `
+            <button data-period="${p.id}" class="px-3 py-1.5 rounded-full text-[11px] font-medium ${state.cliPeriod === p.id ? "bg-white text-[#613BC0] shadow-sm" : "text-slate-500 hover:text-slate-700"}">${p.label}</button>
+          `).join("")}
+        </div>
+      </header>
+    `;
   }
-}
 
-// ── Gráfico ───────────────────────────────────────────────
-function renderChart(mn) {
-  if (activeChart) { activeChart.destroy(); activeChart = null; }
-  if (!mn) mn = getFilteredMonths(activeClient, activeFilter.year, activeFilter.month);
-  if (!mn.length) return;
+  function renderClienteChart(c) {
+    const metrics = [
+      { id: "ventas", label: "Ventas" },
+      { id: "pedidos", label: "Órdenes" },
+      { id: "comercios", label: "Comercios activos" },
+      { id: "vendedores", label: "Vendedores activos" },
+    ];
+    return `
+      <section class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <header class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 class="text-[14px] font-semibold text-slate-900">Evolución mensual</h2>
+            <p class="text-[12px] text-slate-500">Barras: ${metrics.find((m) => m.id === state.clienteMetric).label} · Línea: var. mensual %</p>
+          </div>
+          <div class="flex items-center gap-1 rounded-full bg-slate-100 p-1">
+            ${metrics.map((m) => `
+              <button data-cli-metric="${m.id}" class="px-3 py-1 rounded-full text-[11px] font-medium ${state.clienteMetric === m.id ? "bg-white text-[#613BC0] shadow-sm" : "text-slate-500 hover:text-slate-700"}">${m.label}</button>
+            `).join("")}
+          </div>
+        </header>
+        <div class="px-6 py-5" style="height: 340px;">
+          <canvas id="clienteChart"></canvas>
+        </div>
+      </section>
+    `;
+  }
 
-  const labels = mn.map(m => mLabel(m.year, m.month));
-  const vals   = mn.map(m => m[activeMetric]);
-  const momVals = mn.map((m,i) => i === 0 ? null : mom(mn, i, activeMetric));
+  function renderClienteOps(c) {
+    const last = clientLastMonth(c);
+    const prev = clientPrevMonth(c);
+    const avgVend = clientAvgActive(c, "vendedores");
+    const avgCom = clientAvgActive(c, "comercios");
+    const totalVentas = c.mensual.reduce((s, m) => s + m.ventas, 0);
+    const totalPedidos = c.mensual.reduce((s, m) => s + m.pedidos, 0);
+    const ticket = totalPedidos > 0 ? totalVentas / totalPedidos : 0;
+    const ventaPorVend = avgVend > 0 ? (last?.ventas || 0) / avgVend : 0;
+    const pedPorVend = avgVend > 0 ? (last?.pedidos || 0) / avgVend : 0;
+    const pedPorCom = avgCom > 0 ? (last?.pedidos || 0) / avgCom : 0;
+    const comPorVend = avgVend > 0 ? avgCom / avgVend : 0;
+    const varMes = prev && prev.ventas ? ((last.ventas - prev.ventas) / prev.ventas) : 0;
 
-  const metricLabels = {
-    ventaSinIVA: 'Ventas', vendedoresActivos: 'Vendedores activos',
-    ordenes: 'Pedidos', comerciosActivos: 'Comercios activos'
-  };
-  const isMoney = activeMetric === 'ventaSinIVA';
+    const ops = [
+      { label: "Ticket promedio", value: fmtUSD(ticket, { compact: false }), sub: "USD / pedido" },
+      { label: "Venta por vendedor", value: fmtUSD(ventaPorVend), sub: "mes · USD" },
+      { label: "Pedidos por vendedor", value: pedPorVend.toFixed(1), sub: "productividad" },
+      { label: "Pedidos por comercio", value: pedPorCom.toFixed(1), sub: "frecuencia recompra" },
+      { label: "Comercios por vendedor", value: comPorVend.toFixed(1), sub: "cobertura" },
+      { label: "Ventas último mes", value: fmtUSD(last?.ventas || 0), sub: last ? monthShort(last.month) : "" },
+      { label: "Var. mes anterior", value: (varMes >= 0 ? "↑" : "↓") + " " + fmtPct(Math.abs(varMes), 1), sub: "MoM %" },
+      { label: "Cuentas vendedor reg.", value: fmtNum(last?.registradosVend || 0), sub: "total registradas" },
+    ];
 
-  activeChart = new Chart(document.getElementById('chart'), {
-    data: {
-      labels,
-      datasets: [
-        {
-          type: 'bar',
-          label: metricLabels[activeMetric],
-          data: vals,
-          backgroundColor: '#3b82f6',
-          borderRadius: 5,
-          yAxisID: 'y',
-          order: 2
-        },
-        {
-          type: 'line',
-          label: 'Var. mensual %',
-          data: momVals,
-          borderColor: '#f59e0b',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          pointRadius: 3,
-          pointBackgroundColor: '#f59e0b',
-          tension: 0.3,
-          yAxisID: 'y2',
-          order: 1
-        }
-      ]
-    },
-    options: {
+    return `
+      <section class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <button data-ops-toggle class="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition">
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-slate-400 transition-transform ${state.opsOpen ? "rotate-90" : ""}">▶</span>
+            <h2 class="text-[14px] font-semibold text-slate-900">Métricas operacionales</h2>
+            <span class="text-[11px] text-slate-400">8 indicadores</span>
+          </div>
+          <span class="text-[11px] text-[#613BC0] font-medium">${state.opsOpen ? "Ocultar" : "Mostrar"}</span>
+        </button>
+        ${state.opsOpen ? `
+          <div class="px-6 pb-6 pt-1">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              ${ops.map((o) => `
+                <div class="rounded-lg border border-slate-150 bg-slate-50/50 p-4">
+                  <div class="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">${o.label}</div>
+                  <div class="mt-2 text-[20px] font-bold tabular-nums text-slate-900">${o.value}</div>
+                  <div class="mt-0.5 text-[11px] text-slate-500">${o.sub}</div>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        ` : ""}
+      </section>
+    `;
+  }
+
+  function renderClienteTable(c) {
+    const months = c.mensual;
+    const total = months.reduce((acc, m) => {
+      acc.ventas += m.ventas;
+      acc.pedidos += m.pedidos;
+      acc.comercios += m.comercios;
+      acc.vendedores += m.vendedores;
+      return acc;
+    }, { ventas: 0, pedidos: 0, comercios: 0, vendedores: 0 });
+    const avg = {
+      ticket: total.pedidos > 0 ? total.ventas / total.pedidos : 0,
+      actCom: months.length ? months.reduce((s, m) => s + (m.registradosCom ? m.comercios / m.registradosCom : 0), 0) / months.length : 0,
+    };
+
+    const rows = months.map((m, i) => {
+      const prev = i > 0 ? months[i - 1].ventas : null;
+      const mom = prev && prev > 0 ? (m.ventas - prev) / prev : null;
+      const actCom = m.registradosCom ? m.comercios / m.registradosCom : 0;
+      const tkt = m.pedidos > 0 ? m.ventas / m.pedidos : 0;
+      const ventaVend = m.vendedores > 0 ? m.ventas / m.vendedores : 0;
+      const pedVend = m.vendedores > 0 ? m.pedidos / m.vendedores : 0;
+      const pedCom = m.comercios > 0 ? m.pedidos / m.comercios : 0;
+      return { m, mom, actCom, tkt, ventaVend, pedVend, pedCom };
+    });
+
+    const momBadge = (mom) => {
+      if (mom == null) return `<span class="text-slate-300">—</span>`;
+      const cls = mom > 0.05 ? "bg-[#DCFCE7] text-[#15803D]" : mom < -0.05 ? "bg-[#FEE2E2] text-[#DC2626]" : "bg-slate-100 text-slate-500";
+      const arr = mom > 0 ? "↑" : mom < 0 ? "↓" : "·";
+      return `<span class="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums ${cls}">${arr} ${fmtPct(Math.abs(mom), 1)}</span>`;
+    };
+
+    const cols = state.allColumns
+      ? ["Mes", "Pedidos", "Vendedores", "Ctas. vend. reg.", "Comercios", "% Activación", "Ventas", "Venta / vend.", "Ticket prom.", "Ped. / vend.", "Ped. / comercio", "MoM %"]
+      : ["Mes", "Ventas", "Pedidos", "Comercios", "MoM %"];
+
+    return `
+      <section class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <header class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 class="text-[14px] font-semibold text-slate-900">Desglose mensual</h2>
+            <p class="text-[12px] text-slate-500">${months.length} meses · moneda USD</p>
+          </div>
+          <button data-toggle-cols class="text-[12px] font-medium text-[#613BC0] hover:underline">
+            ${state.allColumns ? "← Vista compacta" : "Ver todas las métricas →"}
+          </button>
+        </header>
+        <div class="overflow-x-auto">
+          <table class="w-full text-[13px]">
+            <thead>
+              <tr class="text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-100 bg-slate-50/60">
+                ${cols.map((c, i) => `<th class="font-semibold px-4 py-2.5 ${i === 0 ? "text-left" : "text-right"}">${c}</th>`).join("")}
+              </tr>
+            </thead>
+            <tbody class="tabular-nums">
+              ${rows.map((r) => {
+                if (state.allColumns) {
+                  return `
+                    <tr class="border-b border-slate-50 hover:bg-[#F9F7FF]/50 transition">
+                      <td class="px-4 py-3 text-left font-medium text-slate-800">${monthShort(r.m.month)}</td>
+                      <td class="px-4 py-3 text-right">${fmtNum(r.m.pedidos)}</td>
+                      <td class="px-4 py-3 text-right">${fmtNum(r.m.vendedores)}</td>
+                      <td class="px-4 py-3 text-right text-slate-500">${fmtNum(r.m.registradosVend)}</td>
+                      <td class="px-4 py-3 text-right">${fmtNum(r.m.comercios)}</td>
+                      <td class="px-4 py-3 text-right text-slate-600">${fmtPct(r.actCom, 1)}</td>
+                      <td class="px-4 py-3 text-right font-semibold text-slate-900">${fmtUSD(r.m.ventas)}</td>
+                      <td class="px-4 py-3 text-right">${fmtUSD(r.ventaVend)}</td>
+                      <td class="px-4 py-3 text-right">${fmtUSD(r.tkt, { compact: false })}</td>
+                      <td class="px-4 py-3 text-right">${r.pedVend.toFixed(1)}</td>
+                      <td class="px-4 py-3 text-right">${r.pedCom.toFixed(1)}</td>
+                      <td class="px-4 py-3 text-right">${momBadge(r.mom)}</td>
+                    </tr>
+                  `;
+                }
+                return `
+                  <tr class="border-b border-slate-50 hover:bg-[#F9F7FF]/50 transition">
+                    <td class="px-4 py-3 text-left font-medium text-slate-800">${monthShort(r.m.month)}</td>
+                    <td class="px-4 py-3 text-right font-semibold text-slate-900">${fmtUSD(r.m.ventas)}</td>
+                    <td class="px-4 py-3 text-right">${fmtNum(r.m.pedidos)}</td>
+                    <td class="px-4 py-3 text-right">${fmtNum(r.m.comercios)}</td>
+                    <td class="px-4 py-3 text-right">${momBadge(r.mom)}</td>
+                  </tr>
+                `;
+              }).join("")}
+              <tr class="bg-[#F9F7FF]/70 border-t-2 border-[#613BC0]/15 font-semibold">
+                <td class="px-4 py-3 text-left text-[#613BC0] text-[11px] uppercase tracking-wider">Total / Prom.</td>
+                ${state.allColumns ? `
+                  <td class="px-4 py-3 text-right">${fmtNum(total.pedidos)}</td>
+                  <td class="px-4 py-3 text-right">${fmtNum(Math.round(total.vendedores / Math.max(months.length,1)))}</td>
+                  <td class="px-4 py-3 text-right text-slate-500">${fmtNum(months[months.length-1]?.registradosVend || 0)}</td>
+                  <td class="px-4 py-3 text-right">${fmtNum(Math.round(total.comercios / Math.max(months.length,1)))}</td>
+                  <td class="px-4 py-3 text-right">${fmtPct(avg.actCom, 1)}</td>
+                  <td class="px-4 py-3 text-right text-slate-900">${fmtUSD(total.ventas)}</td>
+                  <td class="px-4 py-3 text-right">—</td>
+                  <td class="px-4 py-3 text-right">${fmtUSD(avg.ticket, { compact: false })}</td>
+                  <td class="px-4 py-3 text-right">—</td>
+                  <td class="px-4 py-3 text-right">—</td>
+                  <td class="px-4 py-3 text-right">—</td>
+                ` : `
+                  <td class="px-4 py-3 text-right text-slate-900">${fmtUSD(total.ventas)}</td>
+                  <td class="px-4 py-3 text-right">${fmtNum(total.pedidos)}</td>
+                  <td class="px-4 py-3 text-right">${fmtNum(Math.round(total.comercios / Math.max(months.length,1)))}</td>
+                  <td class="px-4 py-3 text-right">—</td>
+                `}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    `;
+  }
+
+  // ---------- Comparativa view ----------
+  function renderComparativa() {
+    const selectable = [
+      ...DATA.groups.map((g) => ({ id: "group:" + g.id, name: g.name, kind: "group" })),
+      ...DATA.clients.filter((c) => c.status !== "nodata").map((c) => ({ id: c.id, name: c.name, kind: "client" })),
+    ];
+    const selected = state.compareIds;
+
+    const entities = selected.map((id) => entityById(id)).filter(Boolean);
+    const bestBy = (key) => Math.max(...entities.map((e) => e.metrics[key] || 0));
+
+    return `
+      <div class="p-6 lg:p-8 space-y-6 mx-auto" style="max-width: 1600px;">
+        <header>
+          <h1 class="text-[22px] font-bold text-slate-900 tracking-tight">Comparativa</h1>
+          <p class="text-[13px] text-slate-500 mt-1">Elige 2–4 entidades — clientes o grupos — para benchmark lado a lado.</p>
+        </header>
+        <section class="rounded-2xl border border-slate-200 bg-white p-5">
+          <div class="flex items-start gap-3 flex-wrap">
+            <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-2">Seleccionados · ${selected.length}/4</span>
+            <div class="flex flex-wrap gap-2">
+              ${selected.map((id) => {
+                const e = entityById(id);
+                return `
+                  <span class="inline-flex items-center gap-2 rounded-full bg-[#F9F7FF] border border-[#613BC0]/20 pl-3 pr-1 py-1 text-[12px] font-medium text-[#613BC0]">
+                    ${e?.name || id}
+                    <button data-remove-cmp="${id}" class="h-5 w-5 rounded-full bg-white/80 hover:bg-white text-[#613BC0] text-[11px]">×</button>
+                  </span>
+                `;
+              }).join("")}
+            </div>
+            <div class="ml-auto flex items-center gap-2">
+              <select id="cmpAdd" class="text-[12px] border border-slate-200 rounded-full px-3 py-1.5 bg-white">
+                <option value="">＋ Añadir…</option>
+                <optgroup label="Grupos">
+                  ${selectable.filter(s => s.kind === "group").map(s => `<option value="${s.id}">${s.name}</option>`).join("")}
+                </optgroup>
+                <optgroup label="Clientes">
+                  ${selectable.filter(s => s.kind === "client").map(s => `<option value="${s.id}">${s.name}</option>`).join("")}
+                </optgroup>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          ${entities.map((e) => renderCmpCard(e, bestBy)).join("")}
+        </section>
+
+        ${renderCmpChart(entities)}
+      </div>
+    `;
+  }
+
+  function entityById(id) {
+    if (id.startsWith("group:")) {
+      const g = DATA.groups.find((x) => x.id === id.slice(6));
+      if (!g) return null;
+      const members = g.members.map(clientById).filter((m) => m && m.status !== "nodata");
+      if (members.length === 0) return null;
+      // aggregate mensual
+      const months = {};
+      members.forEach((m) => m.mensual.forEach((row) => {
+        if (!months[row.month]) months[row.month] = { month: row.month, ventas: 0, pedidos: 0, comercios: 0, vendedores: 0, registradosVend: 0, registradosCom: 0 };
+        months[row.month].ventas += row.ventas;
+        months[row.month].pedidos += row.pedidos;
+        months[row.month].comercios += row.comercios;
+        months[row.month].vendedores += row.vendedores;
+        months[row.month].registradosVend += row.registradosVend;
+        months[row.month].registradosCom += row.registradosCom;
+      }));
+      const mensual = Object.values(months).sort((a, b) => a.month.localeCompare(b.month));
+      return buildEntity(g.name, mensual, "group", id);
+    }
+    const c = clientById(id);
+    if (!c) return null;
+    return buildEntity(c.name, c.mensual, "client", c.id);
+  }
+
+  function buildEntity(name, mensual, kind, id) {
+    const gmv = mensual.reduce((s, m) => s + m.ventas, 0);
+    const totalPedidos = mensual.reduce((s, m) => s + m.pedidos, 0);
+    const activeMonths = mensual.filter((m) => m.ventas > 0);
+    const avgVend = activeMonths.length ? activeMonths.reduce((s, m) => s + m.vendedores, 0) / activeMonths.length : 0;
+    const avgCom = activeMonths.length ? activeMonths.reduce((s, m) => s + m.comercios, 0) / activeMonths.length : 0;
+    const lastRegVend = mensual[mensual.length - 1]?.registradosVend || 0;
+    const ticket = totalPedidos > 0 ? gmv / totalPedidos : 0;
+    const ventaPorVend = avgVend > 0 ? (mensual[mensual.length - 1]?.ventas || 0) / avgVend : 0;
+    const pedPorCom = avgCom > 0 ? (mensual[mensual.length - 1]?.pedidos || 0) / avgCom : 0;
+    const actVend = lastRegVend > 0 ? avgVend / lastRegVend : 0;
+
+    return {
+      id, name, kind, mensual, gmv,
+      metrics: {
+        actVend: actVend,
+        ticket: ticket,
+        ventaPorVend: ventaPorVend,
+        pedPorCom: pedPorCom,
+      },
+    };
+  }
+
+  function renderCmpCard(e, bestBy) {
+    const spark = e.mensual.map((m) => m.ventas);
+    const bar = (value, key, label, fmt) => {
+      const best = bestBy(key) || 1;
+      const pct = Math.max(2, Math.min(100, (value / best) * 100));
+      const isBest = value === best;
+      return `
+        <div>
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-slate-500">${label}</span>
+            <span class="tabular-nums font-semibold text-slate-900 ${isBest ? "text-[#15803D]" : ""}">${fmt(value)}</span>
+          </div>
+          <div class="mt-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div class="h-full rounded-full ${isBest ? "bg-[#61CE70]" : "bg-[#613BC0]"}" style="width:${pct}%"></div>
+          </div>
+        </div>
+      `;
+    };
+    return `
+      <article class="rounded-2xl border border-slate-200 bg-white p-5 space-y-4 hover:border-[#613BC0]/30 hover:shadow-[0_1px_4px_rgba(0,0,0,0.05)] transition">
+        <header class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">${e.kind === "group" ? "Grupo" : "Cliente"}</div>
+            <h3 class="text-[15px] font-semibold text-slate-900 truncate">${e.name}</h3>
+          </div>
+          <div class="h-8 w-20 shrink-0">${sparkline(spark, { w: 80, h: 28, stroke: "#613BC0" })}</div>
+        </header>
+        <div>
+          <div class="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">GMV 12m</div>
+          <div class="text-[24px] font-bold tabular-nums text-slate-900 leading-none mt-1">${fmtUSD(e.gmv)}</div>
+        </div>
+        <div class="space-y-2.5 pt-2 border-t border-slate-100">
+          ${bar(e.metrics.actVend, "actVend", "% activación vendedores", (v) => fmtPct(v, 1))}
+          ${bar(e.metrics.ticket, "ticket", "Ticket promedio", (v) => fmtUSD(v, { compact: false }))}
+          ${bar(e.metrics.ventaPorVend, "ventaPorVend", "Venta / vendedor", (v) => fmtUSD(v))}
+          ${bar(e.metrics.pedPorCom, "pedPorCom", "Pedidos / comercio", (v) => v.toFixed(1) + "×")}
+        </div>
+      </article>
+    `;
+  }
+
+  function renderCmpChart(entities) {
+    const metrics = [
+      { id: "ventas", label: "Ventas" },
+      { id: "pedidos", label: "Pedidos" },
+      { id: "comercios", label: "Comercios activos" },
+    ];
+    return `
+      <section class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <header class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 class="text-[14px] font-semibold text-slate-900">Evolución comparada · 12 meses</h2>
+            <p class="text-[12px] text-slate-500">Una línea por entidad seleccionada</p>
+          </div>
+          <div class="flex items-center gap-1 rounded-full bg-slate-100 p-1">
+            ${metrics.map((m) => `
+              <button data-cmp-metric="${m.id}" class="px-3 py-1 rounded-full text-[11px] font-medium ${state.compareMetric === m.id ? "bg-white text-[#613BC0] shadow-sm" : "text-slate-500 hover:text-slate-700"}">${m.label}</button>
+            `).join("")}
+          </div>
+        </header>
+        <div class="px-6 py-5" style="height: 360px;">
+          <canvas id="cmpChart"></canvas>
+        </div>
+      </section>
+    `;
+  }
+
+  // ---------- Chart rendering ----------
+  let chartInstances = {};
+  function destroyCharts() {
+    Object.values(chartInstances).forEach((ch) => ch && ch.destroy());
+    chartInstances = {};
+  }
+  function afterRender() {
+    destroyCharts();
+    if (state.view === "cliente") drawClienteChart();
+    if (state.view === "comparativa") drawCmpChart();
+  }
+
+  function drawClienteChart() {
+    const c = clientById(state.selectedClient);
+    const ctx = document.getElementById("clienteChart");
+    if (!ctx || !c) return;
+    const labels = c.mensual.map((m) => monthShort(m.month));
+    const values = c.mensual.map((m) => m[state.clienteMetric] || 0);
+    const momValues = c.mensual.map((m, i) => {
+      if (i === 0) return null;
+      const prev = c.mensual[i - 1][state.clienteMetric];
+      if (!prev) return null;
+      return (((m[state.clienteMetric] || 0) - prev) / prev) * 100;
+    });
+    chartInstances.cliente = new Chart(ctx, {
+      data: {
+        labels,
+        datasets: [
+          {
+            type: "bar",
+            label: "Valor",
+            data: values,
+            backgroundColor: "#613BC0",
+            borderRadius: 6,
+            yAxisID: "y",
+            maxBarThickness: 46,
+          },
+          {
+            type: "line",
+            label: "Var. mensual %",
+            data: momValues,
+            borderColor: "#FFBC7D",
+            backgroundColor: "#FFBC7D",
+            borderWidth: 2,
+            pointRadius: 3,
+            pointBackgroundColor: "#FFBC7D",
+            tension: 0.25,
+            yAxisID: "y1",
+            spanGaps: true,
+          },
+        ],
+      },
+      options: chartBaseOpts({ dualAxis: true, valueFormatter: state.clienteMetric === "ventas" ? (v) => fmtUSD(v) : (v) => fmtNum(v) }),
+    });
+  }
+
+  function drawCmpChart() {
+    const ctx = document.getElementById("cmpChart");
+    if (!ctx) return;
+    const entities = state.compareIds.map(entityById).filter(Boolean);
+    // union of months
+    const monthsSet = new Set();
+    entities.forEach((e) => e.mensual.forEach((m) => monthsSet.add(m.month)));
+    const months = Array.from(monthsSet).sort();
+    const palette = ["#613BC0", "#61CE70", "#FFBC7D", "#DC2626", "#0EA5E9"];
+    const datasets = entities.map((e, idx) => {
+      const byMonth = Object.fromEntries(e.mensual.map((m) => [m.month, m]));
+      return {
+        label: e.name,
+        data: months.map((mm) => (byMonth[mm] ? byMonth[mm][state.compareMetric] : null)),
+        borderColor: palette[idx % palette.length],
+        backgroundColor: palette[idx % palette.length] + "22",
+        borderWidth: 2.5,
+        pointRadius: 3,
+        tension: 0.3,
+        spanGaps: true,
+      };
+    });
+    chartInstances.cmp = new Chart(ctx, {
+      type: "line",
+      data: { labels: months.map(monthShort), datasets },
+      options: chartBaseOpts({ dualAxis: false, valueFormatter: state.compareMetric === "ventas" ? (v) => fmtUSD(v) : (v) => fmtNum(v), showLegend: true }),
+    });
+  }
+
+  function chartBaseOpts({ dualAxis, valueFormatter, showLegend = false }) {
+    return {
       responsive: true,
       maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
+      interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: { position: 'top', labels: { font: { size: 11 } } },
+        legend: showLegend
+          ? { position: "bottom", labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true, font: { size: 11, family: "'Helvetica Neue', Helvetica, Arial, sans-serif" }, color: "#64748B" } }
+          : { display: false },
         tooltip: {
+          backgroundColor: "#0F172A",
+          titleColor: "#FFFFFF",
+          bodyColor: "#E2E8F0",
+          padding: 10,
+          cornerRadius: 8,
+          titleFont: { family: "'Helvetica Neue', Helvetica, Arial, sans-serif", size: 12 },
+          bodyFont: { family: "'Helvetica Neue', Helvetica, Arial, sans-serif", size: 12 },
           callbacks: {
-            label: ctx => {
-              if (ctx.datasetIndex === 0) return ` ${metricLabels[activeMetric]}: ${isMoney ? fmtCM(ctx.raw) : num(ctx.raw)}`;
-              if (ctx.raw == null) return null;
-              return ` Var. mensual: ${ctx.raw >= 0 ? '+' : ''}${ctx.raw.toFixed(1)}%`;
-            }
-          }
-        }
+            label: (ctx) => {
+              const v = ctx.parsed.y;
+              if (v == null) return ctx.dataset.label + ": —";
+              if (ctx.dataset.yAxisID === "y1") return `${ctx.dataset.label}: ${v.toFixed(1)}%`;
+              return `${ctx.dataset.label}: ${valueFormatter(v)}`;
+            },
+          },
+        },
       },
       scales: {
-        y: {
-          position: 'left',
-          grid: { color: '#f1f5f9' },
-          ticks: { callback: v => isMoney ? fmtCM(v) : num(v), font: { size: 11 } }
-        },
-        y2: {
-          position: 'right',
+        x: {
           grid: { display: false },
-          ticks: { callback: v => (v == null ? '' : v.toFixed(1) + '%'), font: { size: 11 } }
+          ticks: { color: "#94A3B8", font: { size: 11, family: "'Helvetica Neue'" } },
         },
-        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
-      }
-    }
-  });
-}
+        y: {
+          position: "left",
+          grid: { color: "#F1F5F9", drawBorder: false },
+          ticks: {
+            color: "#94A3B8",
+            font: { size: 11, family: "'Helvetica Neue'" },
+            callback: (v) => valueFormatter(v),
+          },
+        },
+        ...(dualAxis
+          ? {
+              y1: {
+                position: "right",
+                grid: { display: false },
+                ticks: { color: "#FFBC7D", font: { size: 11, family: "'Helvetica Neue'" }, callback: (v) => `${v.toFixed(0)}%` },
+              },
+            }
+          : {}),
+      },
+    };
+  }
 
-// ── Tabla mensual ─────────────────────────────────────────
-function renderTable(mn) {
-  if (!mn) mn = getFilteredMonths(activeClient, activeFilter.year, activeFilter.month);
-  const reg = activeClient.comerciosRegistrados;
-
-  let totOrd=0, totSin=0;
-  mn.forEach(m => { totOrd+=m.ordenes; totSin+=m.ventaSinIVA; });
-
-  document.getElementById('monthly-tbody').innerHTML = mn.map((m, i) => {
-    const momVal      = mom(mn, i, 'ventaSinIVA');
-    const actPct      = reg > 0 ? m.comerciosActivos / reg * 100 : null;
-    const ticket      = m.ordenes > 0 ? m.ventaSinIVA / m.ordenes : 0;
-    const freqCom     = m.comerciosActivos  > 0 ? m.ordenes / m.comerciosActivos  : 0;
-    const freqVend    = m.vendedoresActivos > 0 ? m.ordenes / m.vendedoresActivos : 0;
-    const ventaVend   = m.vendedoresActivos > 0 ? m.ventaSinIVA / m.vendedoresActivos : 0;
-    return `<tr class="border-t border-gray-50 hover:bg-blue-50/40">
-      <td class="px-4 py-2.5 font-medium text-gray-800 whitespace-nowrap">${mLabel(m.year, m.month)}</td>
-      <td class="px-4 py-2.5 text-right tabular-nums">${num(m.ordenes)}</td>
-      <td class="px-4 py-2.5 text-right tabular-nums">${num(m.vendedoresActivos)}</td>
-      <td class="px-4 py-2.5 text-right tabular-nums text-gray-400">${num(activeClient.cuentasVendedor) || '—'}</td>
-      <td class="px-4 py-2.5 text-right tabular-nums">${num(m.comerciosActivos)}</td>
-      <td class="px-4 py-2.5 text-right">${actPct != null ? pct(actPct) : '—'}</td>
-      <td class="px-4 py-2.5 text-right font-medium tabular-nums">${fmtCM(m.ventaSinIVA)}</td>
-      <td class="px-4 py-2.5 text-right tabular-nums">${fmtCM(ventaVend)}</td>
-      <td class="px-4 py-2.5 text-right tabular-nums">${fmtCM(ticket)}</td>
-      <td class="px-4 py-2.5 text-right tabular-nums">${freqVend.toFixed(1)}x</td>
-      <td class="px-4 py-2.5 text-right tabular-nums">${freqCom.toFixed(1)}x</td>
-      <td class="px-4 py-2.5 text-right">${momBadge(momVal)}</td>
-    </tr>`;
-  }).join('');
-
-  document.getElementById('monthly-tfoot').innerHTML = `<tr>
-    <td class="px-4 py-2.5">Total / Prom.</td>
-    <td class="px-4 py-2.5 text-right tabular-nums">${num(totOrd)}</td>
-    <td class="px-4 py-2.5 text-right">—</td>
-    <td class="px-4 py-2.5 text-right tabular-nums text-gray-400">${num(activeClient.cuentasVendedor) || '—'}</td>
-    <td class="px-4 py-2.5 text-right">—</td>
-    <td class="px-4 py-2.5 text-right">—</td>
-    <td class="px-4 py-2.5 text-right tabular-nums">${fmtCM(totSin)}</td>
-    <td class="px-4 py-2.5 text-right">—</td>
-    <td class="px-4 py-2.5 text-right tabular-nums">${fmtCM(totOrd > 0 ? totSin/totOrd : 0)}</td>
-    <td class="px-4 py-2.5 text-right">—</td>
-    <td class="px-4 py-2.5 text-right">—</td>
-    <td class="px-4 py-2.5 text-right">—</td>
-  </tr>`;
-}
-
-// ── Tabs métricas ─────────────────────────────────────────
-function setupTabs() {
-  document.querySelectorAll('.metric-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.metric-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      activeMetric = tab.dataset.metric;
-      if (activeClient) renderChart();
+  // ---------- Event binding ----------
+  function bind() {
+    document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.tab)));
+    document.querySelectorAll("[data-currency]").forEach((b) => b.addEventListener("click", () => { state.displayCurrency = b.dataset.currency; render(); }));
+    document.querySelectorAll("[data-client]").forEach((b) => b.addEventListener("click", () => selectClient(b.dataset.client)));
+    document.querySelectorAll("[data-row-client]").forEach((b) => b.addEventListener("click", () => selectClient(b.dataset.rowClient)));
+    document.querySelectorAll("[data-alert-client]").forEach((b) => b.addEventListener("click", () => selectClient(b.dataset.alertClient)));
+    document.querySelectorAll("[data-sort]").forEach((b) => b.addEventListener("click", () => { state.rankingSort = b.dataset.sort; render(); }));
+    document.querySelectorAll("[data-cli-metric]").forEach((b) => b.addEventListener("click", () => { state.clienteMetric = b.dataset.cliMetric; render(); }));
+    document.querySelectorAll("[data-cmp-metric]").forEach((b) => b.addEventListener("click", () => { state.compareMetric = b.dataset.cmpMetric; render(); }));
+    document.querySelectorAll("[data-period]").forEach((b) => b.addEventListener("click", () => { state.cliPeriod = b.dataset.period; render(); }));
+    const ops = document.querySelector("[data-ops-toggle]");
+    if (ops) ops.addEventListener("click", () => { state.opsOpen = !state.opsOpen; render(); });
+    const hideNoData = document.querySelector("[data-hide-nodata]");
+    if (hideNoData) hideNoData.addEventListener("click", (e) => { e.preventDefault(); state.hideNoData = !state.hideNoData; render(); });
+    const toggleCols = document.querySelector("[data-toggle-cols]");
+    if (toggleCols) toggleCols.addEventListener("click", () => { state.allColumns = !state.allColumns; render(); });
+    document.querySelectorAll("[data-remove-cmp]").forEach((b) => b.addEventListener("click", () => {
+      state.compareIds = state.compareIds.filter((x) => x !== b.dataset.removeCmp);
+      render();
+    }));
+    const cmpAdd = document.getElementById("cmpAdd");
+    if (cmpAdd) cmpAdd.addEventListener("change", (e) => {
+      if (!e.target.value) return;
+      if (state.compareIds.length >= 4) { e.target.value = ""; return; }
+      if (!state.compareIds.includes(e.target.value)) state.compareIds.push(e.target.value);
+      e.target.value = "";
+      render();
     });
-  });
-}
+  }
+
+  // ---------- Init ----------
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", render);
+  } else {
+    render();
+  }
+})();
+
 </script>
-</body>
-</html>
+
+
+</body></html>
