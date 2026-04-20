@@ -241,6 +241,14 @@
     if (active.length === 0) return 0;
     return active.reduce((s, m) => s + (m[key] || 0), 0) / active.length;
   }
+  function applyPeriodFilter(months) {
+    const p = state.cliPeriod;
+    if (!p || p === "todo") return months;
+    if (p === "2025") return months.filter((m) => m.month.startsWith("2025-"));
+    if (p === "2026") return months.filter((m) => m.month.startsWith("2026-"));
+    const mm = { ene: "01", feb: "02", mar: "03", abr: "04", may: "05", jun: "06", jul: "07", ago: "08", sep: "09", oct: "10", nov: "11", dic: "12" }[p];
+    return mm ? months.filter((m) => m.month.endsWith("-" + mm)) : months;
+  }
   function clientStatus(c) {
     if (c.status === "nodata") return "nodata";
     const mom = clientMoMClosed(c) != null ? clientMoMClosed(c) : clientMoM(c);
@@ -853,11 +861,12 @@
     const last = clientLastMonth(c);
     const prev = clientPrevMonth(c);
     const mom = clientMoM(c);
-    const activeMonths = c.mensual.filter((m) => m.ventas > 0);
+    const filteredMensual = applyPeriodFilter(c.mensual);
+    const activeMonths = filteredMensual.filter((m) => m.ventas > 0);
     const periodoVentas = activeMonths.reduce((s, m) => s + m.ventas, 0);
     const periodoPedidos = activeMonths.reduce((s, m) => s + m.pedidos, 0);
-    const avgVend = clientAvgActive(c, "vendedores");
-    const avgCom = clientAvgActive(c, "comercios");
+    const avgVend = activeMonths.length ? activeMonths.reduce((s, m) => s + m.vendedores, 0) / activeMonths.length : 0;
+    const avgCom = activeMonths.length ? activeMonths.reduce((s, m) => s + m.comercios, 0) / activeMonths.length : 0;
     const pctVend = (avgVend / (last?.registradosVend || 1)) * 100;
     const pctCom = (avgCom / (last?.registradosCom || 1)) * 100;
 
@@ -977,12 +986,14 @@
   }
 
   function renderClienteOps(c) {
-    const last = clientLastMonth(c);
-    const prev = clientPrevMonth(c);
-    const avgVend = clientAvgActive(c, "vendedores");
-    const avgCom = clientAvgActive(c, "comercios");
-    const totalVentas = c.mensual.reduce((s, m) => s + m.ventas, 0);
-    const totalPedidos = c.mensual.reduce((s, m) => s + m.pedidos, 0);
+    const filteredMensual = applyPeriodFilter(c.mensual);
+    const activeFilt = filteredMensual.filter((m) => m.ventas > 0);
+    const last = activeFilt.length ? activeFilt[activeFilt.length - 1] : clientLastMonth(c);
+    const prev = activeFilt.length > 1 ? activeFilt[activeFilt.length - 2] : clientPrevMonth(c);
+    const avgVend = activeFilt.length ? activeFilt.reduce((s, m) => s + m.vendedores, 0) / activeFilt.length : 0;
+    const avgCom = activeFilt.length ? activeFilt.reduce((s, m) => s + m.comercios, 0) / activeFilt.length : 0;
+    const totalVentas = filteredMensual.reduce((s, m) => s + m.ventas, 0);
+    const totalPedidos = filteredMensual.reduce((s, m) => s + m.pedidos, 0);
     const ticket = totalPedidos > 0 ? totalVentas / totalPedidos : 0;
     const ventaPorVend = avgVend > 0 ? (last?.ventas || 0) / avgVend : 0;
     const pedPorVend = avgVend > 0 ? (last?.pedidos || 0) / avgVend : 0;
@@ -993,9 +1004,9 @@
     const ops = [
       { label: "Ticket promedio", value: fmtUSD(ticket, { compact: false }), sub: "USD / pedido" },
       { label: "Venta por vendedor", value: fmtUSD(ventaPorVend), sub: "mes · USD" },
-      { label: "Pedidos por vendedor", value: pedPorVend.toFixed(1), sub: "productividad" },
-      { label: "Pedidos por comercio", value: pedPorCom.toFixed(1), sub: "frecuencia recompra" },
-      { label: "Comercios por vendedor", value: comPorVend.toFixed(1), sub: "cobertura" },
+      { label: "Pedidos por vendedor", value: pedPorVend.toFixed(1), sub: "ped. / vendedor" },
+      { label: "Pedidos por comercio", value: pedPorCom.toFixed(1), sub: "ped. / comercio" },
+      { label: "Comercios por vendedor", value: comPorVend.toFixed(1), sub: "comerc. / vendedor" },
       { label: "Ventas último mes", value: fmtUSD(last?.ventas || 0), sub: last ? monthShort(last.month) : "" },
       { label: "Var. mes anterior", value: (varMes >= 0 ? "↑" : "↓") + " " + fmtPct(Math.abs(varMes), 1), sub: "MoM %" },
       { label: "Cuentas vendedor reg.", value: fmtNum(last?.registradosVend || 0), sub: "total registradas" },
@@ -1029,7 +1040,7 @@
   }
 
   function renderClienteTable(c) {
-    const months = c.mensual;
+    const months = applyPeriodFilter(c.mensual);
     const total = months.reduce((acc, m) => {
       acc.ventas += m.ventas;
       acc.pedidos += m.pedidos;
@@ -1325,11 +1336,12 @@
     const c = clientById(state.selectedClient);
     const ctx = document.getElementById("clienteChart");
     if (!ctx || !c) return;
-    const labels = c.mensual.map((m) => monthShort(m.month));
-    const values = c.mensual.map((m) => m[state.clienteMetric] || 0);
-    const momValues = c.mensual.map((m, i) => {
+    const filtered = applyPeriodFilter(c.mensual);
+    const labels = filtered.map((m) => monthShort(m.month));
+    const values = filtered.map((m) => m[state.clienteMetric] || 0);
+    const momValues = filtered.map((m, i) => {
       if (i === 0) return null;
-      const prev = c.mensual[i - 1][state.clienteMetric];
+      const prev = filtered[i - 1][state.clienteMetric];
       if (!prev) return null;
       return (((m[state.clienteMetric] || 0) - prev) / prev) * 100;
     });
