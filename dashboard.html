@@ -375,8 +375,8 @@
 
     const renderClientCard = (c, indent = false) => {
       const nodata = c.status === "nodata";
-      const last = clientLastMonth(c);
-      const mom = clientMoM(c);
+      const last = clientLastClosedMonth(c) || clientLastMonth(c);
+      const mom = clientMoMClosed(c);
       const active = state.selectedClient === c.id;
       const momCls = mom == null ? "text-slate-400" : mom >= 0 ? "text-[#16A34A]" : "text-[#DC2626]";
       const momArrow = mom == null ? "·" : mom >= 0 ? "↑" : "↓";
@@ -406,7 +406,7 @@
     const renderGroup = (g) => {
       const allMembers = g.members.map(clientById).filter(Boolean);
       const members = allMembers.filter((m) => !state.hideNoData || m.status !== "nodata");
-      const gmv = members.reduce((s, m) => s + (clientLastMonth(m)?.ventas || 0), 0);
+      const gmv = members.reduce((s, m) => s + ((clientLastClosedMonth(m) || clientLastMonth(m))?.ventas || 0), 0);
       return `
         <div class="mb-2">
           <div class="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-[#F9F7FF]">
@@ -657,24 +657,24 @@
     const express = clientById("express");
     const sonrie = clientById("sonrie");
 
-    const coexitoMoM = clientMoM(coexito);
+    const coexitoMoM = clientMoMClosed(coexito);
     if (coexitoMoM != null && coexitoMoM < -0.2)
       alerts.push({
         tone: "red",
         icon: "↓",
         title: "CoÉxito",
-        subtitle: `Caída ${fmtPct(Math.abs(coexitoMoM), 1)} MoM en abril`,
-        detail: `de ${fmtUSD(clientPrevMonth(coexito).ventas)} → ${fmtUSD(clientLastMonth(coexito).ventas)}`,
+        subtitle: `Caída ${fmtPct(Math.abs(coexitoMoM), 1)} MoM`,
+        detail: `de ${fmtUSD(clientPrevClosedMonth(coexito)?.ventas)} → ${fmtUSD(clientLastClosedMonth(coexito)?.ventas)}`,
         clientId: "coexito",
       });
-    const munnecoMoM = clientMoM(munneco);
+    const munnecoMoM = clientMoMClosed(munneco);
     if (munnecoMoM != null && munnecoMoM < -0.2)
       alerts.push({
         tone: "red",
         icon: "↓",
         title: "El Muñeco",
         subtitle: `Caída ${fmtPct(Math.abs(munnecoMoM), 0)} MoM`,
-        detail: `${fmtUSD(clientLastMonth(munneco).ventas)} en abril`,
+        detail: `${fmtUSD(clientLastClosedMonth(munneco)?.ventas)}`,
         clientId: "munneco",
       });
     alerts.push({
@@ -763,8 +763,8 @@
     const rows = DATA.clients
       .filter((c) => c.status !== "nodata")
       .map((c) => {
-        const last = clientLastMonth(c);
-        const mom = clientMoM(c);
+        const last = clientLastClosedMonth(c) || clientLastMonth(c);
+        const mom = clientMoMClosed(c);
         const gmv = clientGmv12m(c);
         return { c, last, mom, gmv, spark: c.mensual.slice(-6).map((m) => m.ventas), status: clientStatus(c) };
       });
@@ -858,9 +858,9 @@
   function renderCliente() {
     if (!state.selectedClient) return `<div class="p-8 text-slate-500">Selecciona un cliente.</div>`;
     const c = clientById(state.selectedClient);
-    const last = clientLastMonth(c);
-    const prev = clientPrevMonth(c);
-    const mom = clientMoM(c);
+    const last = clientLastClosedMonth(c) || clientLastMonth(c);
+    const prev = clientPrevClosedMonth(c) || clientPrevMonth(c);
+    const mom = clientMoMClosed(c);
     const filteredMensual = applyPeriodFilter(c.mensual);
     const activeMonths = filteredMensual.filter((m) => m.ventas > 0);
     const periodoVentas = activeMonths.reduce((s, m) => s + m.ventas, 0);
