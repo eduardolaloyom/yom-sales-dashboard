@@ -1092,10 +1092,10 @@
           </button>
         </header>
         <div class="overflow-x-auto">
-          <table class="w-full text-[13px]">
+          <table class="min-w-full text-[13px]">
             <thead>
               <tr class="text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-100 bg-slate-50/60">
-                ${cols.map((c, i) => `<th class="font-semibold px-4 py-2.5 ${i === 0 ? "text-left" : "text-right"}">${c}</th>`).join("")}
+                ${cols.map((c, i) => `<th class="font-semibold px-4 py-2.5 whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}">${c}</th>`).join("")}
               </tr>
             </thead>
             <tbody class="tabular-nums">
